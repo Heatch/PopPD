@@ -76,7 +76,7 @@ export class MockBackend implements Backend {
     return { input: 12_400, output: 3_200, cost: 0 }
   }
 
-  async createSession(input: { title: string; directory: string; model: string }): Promise<string> {
+  async createSession(input: { title: string; directory: string; model: string; agent?: string }): Promise<string> {
     const id = `mock_${randomUUID()}`
     this.sessions.set(id, {
       id,
@@ -87,6 +87,10 @@ export class MockBackend implements Backend {
       tools: [],
     })
     return id
+  }
+
+  async removeSession(sessionID: string): Promise<void> {
+    this.sessions.delete(sessionID)
   }
 
   async prompt(sessionID: string, text: string): Promise<void> {

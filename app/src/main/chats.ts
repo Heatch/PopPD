@@ -1,22 +1,24 @@
 import fs from "node:fs"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
+import { friendlyError } from "../shared/errors"
 import type { ChatMessage, ChatSummary, PopdEvent, UsageEntry } from "../shared/types"
 import type { Backend } from "./backend/types"
 import { listArtifacts } from "./delivery/artifacts"
 import {
   ensureLauncher,
   mainArtifactPath,
-  openPath,
   readApiKeyRequest,
   sweepScaffolding,
 } from "./delivery/launcher"
+import { openPath } from "./delivery/shell"
 import { ensureWorkspace } from "./delivery/workspace"
 import { elapsedText, toolsLine } from "./engine/progress"
 import { preflight } from "./guardrails/preflight"
 import { sanitize } from "./guardrails/lint"
 import { estimateCostUsd } from "./model"
 import type { SettingsStore } from "./settings"
+import { readJson, writeJson } from "./storage"
 
 const stallMs = () => Number(process.env.POPD_STALL_MS ?? 4 * 60_000)
 const pollMs = () => Number(process.env.POPD_POLL_MS ?? 1500)
@@ -35,6 +37,7 @@ interface Run {
 export class ChatManager {
   private chats: ChatSummary[] = []
   private runs = new Map<string, Run>()
+  private lastBusy = false
 
   constructor(
     private deps: {
@@ -45,21 +48,20 @@ export class ChatManager {
       emit: (event: PopdEvent) => void
     },
   ) {
-    this.load()
-  }
-
-  private load() {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(this.deps.indexPath, "utf8"))
-      if (Array.isArray(parsed)) this.chats = parsed
-    } catch {
-      this.chats = []
-    }
+    this.chats = readJson<ChatSummary[]>(deps.indexPath, [])
+    if (!Array.isArray(this.chats)) this.chats = []
   }
 
   private save() {
-    fs.mkdirSync(path.dirname(this.deps.indexPath), { recursive: true })
-    fs.writeFileSync(this.deps.indexPath, JSON.stringify(this.chats, null, 2))
+    writeJson(this.deps.indexPath, this.chats)
+  }
+
+  private emitBusy() {
+    const busy = this.runs.size > 0
+    if (busy !== this.lastBusy) {
+      this.lastBusy = busy
+      this.deps.emit({ type: "busy-changed", busy })
+    }
   }
 
   list(): ChatSummary[] {
@@ -70,22 +72,44 @@ export class ChatManager {
     return this.chats.find((chat) => chat.id === id)
   }
 
-  create(title?: string): ChatSummary {
+  create(title?: string, agent = "pop"): ChatSummary {
     const name = title?.trim() || "New idea"
     const workspace = ensureWorkspace(this.deps.settings.get().workspaceRoot, name)
     const now = Date.now()
-    const chat: ChatSummary = { id: randomUUID(), title: name, workspace, createdAt: now, updatedAt: now }
+    const chat: ChatSummary = {
+      id: randomUUID(),
+      title: name,
+      workspace,
+      createdAt: now,
+      updatedAt: now,
+      agent,
+    }
     this.chats.push(chat)
     this.save()
     this.deps.emit({ type: "chats-changed" })
     return chat
   }
 
-  remove(id: string) {
+  rename(id: string, title: string) {
+    const chat = this.find(id)
+    if (!chat) return
+    const next = title.trim().slice(0, 80)
+    if (!next) return
+    chat.title = next
+    chat.updatedAt = Date.now()
+    this.save()
+    this.deps.emit({ type: "chats-changed" })
+    this.deps.emit({ type: "library-changed" })
+  }
+
+  async remove(id: string) {
+    const chat = this.find(id)
     const run = this.runs.get(id)
     if (run?.timer) clearInterval(run.timer)
     this.runs.delete(id)
-    this.chats = this.chats.filter((chat) => chat.id !== id)
+    this.emitBusy()
+    if (chat?.sessionID) await this.deps.backend.removeSession(chat.sessionID).catch(() => {})
+    this.chats = this.chats.filter((entry) => entry.id !== id)
     this.save()
     this.deps.emit({ type: "chats-changed" })
     this.deps.emit({ type: "library-changed" })
@@ -118,6 +142,38 @@ export class ChatManager {
     return entries.sort((a, b) => b.input + b.output - (a.input + a.output))
   }
 
+  /** After a restart, pick up runs that were still going when the app last died. */
+  async recover(): Promise<void> {
+    for (const chat of this.chats) {
+      if (!chat.sessionID || this.runs.has(chat.id)) continue
+      let state
+      try {
+        state = await this.deps.backend.session(chat.sessionID)
+      } catch {
+        continue
+      }
+      if (state.outcome) continue
+
+      const messages = await this.deps.backend.messages(chat.sessionID).catch(() => [])
+      const lastUser = [...messages].reverse().find((message) => message.type === "user" && message.text.trim())
+      const now = Date.now()
+      const run: Run = {
+        sessionID: chat.sessionID,
+        prompt: lastUser?.text ?? "",
+        startedAt: now,
+        lastActivity: now,
+        asking: false,
+        lastLine: "",
+        ticking: false,
+      }
+      this.runs.set(chat.id, run)
+      run.timer = setInterval(() => void this.tick(chat.id), pollMs())
+      this.deps.emit({ type: "chat-progress", chatId: chat.id, line: "Still working on this one…", elapsedMs: 0 })
+      this.emitBusy()
+      void this.tick(chat.id)
+    }
+  }
+
   async send(chatId: string, text: string) {
     const chat = this.find(chatId)
     if (!chat) throw new Error("Unknown chat")
@@ -139,6 +195,7 @@ export class ChatManager {
         title,
         directory: chat.workspace,
         model: this.deps.settings.get().model,
+        agent: chat.agent ?? "pop",
       })
       chat.title = title
       this.save()
@@ -157,6 +214,7 @@ export class ChatManager {
       ticking: false,
     }
     this.runs.set(chatId, run)
+    this.emitBusy()
     this.deps.emit({ type: "chat-progress", chatId, line: "Getting started…", elapsedMs: 0 })
     run.timer = setInterval(() => void this.tick(chatId), pollMs())
     void this.tick(chatId)
@@ -174,6 +232,7 @@ export class ChatManager {
   stopAll() {
     for (const run of this.runs.values()) if (run.timer) clearInterval(run.timer)
     this.runs.clear()
+    this.emitBusy()
   }
 
   private async tick(chatId: string) {
@@ -223,7 +282,7 @@ export class ChatManager {
       if (state.updated > run.lastActivity) run.lastActivity = state.updated
 
       if (state.outcome) {
-        await this.finish(chatId, run, state.outcome)
+        await this.finish(chatId, run, state.outcome, state.error)
         return
       }
 
@@ -246,19 +305,26 @@ export class ChatManager {
   private clear(chatId: string, run: Run) {
     if (run.timer) clearInterval(run.timer)
     this.runs.delete(chatId)
+    this.emitBusy()
   }
 
   private guardrailLog(line: string) {
     if (!this.deps.logDir) return
     try {
       fs.mkdirSync(this.deps.logDir, { recursive: true })
-      fs.appendFileSync(path.join(this.deps.logDir, "guardrails.log"), `${new Date().toISOString()} ${line}\n`)
+      const file = path.join(this.deps.logDir, "guardrails.log")
+      try {
+        if (fs.statSync(file).size > 1_000_000) fs.renameSync(file, `${file}.1`)
+      } catch {
+        // no log yet
+      }
+      fs.appendFileSync(file, `${new Date().toISOString()} ${line}\n`)
     } catch {
       // logging must never break a run
     }
   }
 
-  private async finish(chatId: string, run: Run, outcome: string) {
+  private async finish(chatId: string, run: Run, outcome: string, error?: string) {
     const chat = this.find(chatId)
     this.clear(chatId, run)
     if (!chat) return
@@ -268,8 +334,8 @@ export class ChatManager {
         chatId,
         message:
           outcome === "interrupted"
-            ? "It stopped before finishing. Try again when you're ready."
-            : "Something went wrong while making that. Your files are safe — try again.",
+            ? friendlyError("interrupted")
+            : friendlyError(error),
         retryable: true,
       })
       this.deps.emit({ type: "chats-changed" })
@@ -304,7 +370,7 @@ export class ChatManager {
     if (this.deps.settings.get().autoOpen && process.env.POPD_NO_OPEN !== "1") {
       const main = mainArtifactPath(chat.workspace)
       if (main) {
-        openPath(main)
+        await openPath(main).catch(() => {})
         opened = main
       }
     }

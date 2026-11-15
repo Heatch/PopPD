@@ -4,6 +4,7 @@ export interface BackendSessionState {
   id: string
   outcome?: string
   updated: number
+  error?: string
 }
 
 export interface BackendFormField {
@@ -43,7 +44,8 @@ export interface Backend {
   connectIntegration(integrationID: string, key: string): Promise<void>
   listMcp(directory: string): Promise<McpServerInfo[]>
   sessionUsage(sessionID: string): Promise<{ input: number; output: number; cost: number }>
-  createSession(input: { title: string; directory: string; model: string }): Promise<string>
+  createSession(input: { title: string; directory: string; model: string; agent?: string }): Promise<string>
+  removeSession(sessionID: string): Promise<void>
   prompt(sessionID: string, text: string): Promise<void>
   session(sessionID: string): Promise<BackendSessionState>
   forms(sessionID: string): Promise<BackendForm[]>

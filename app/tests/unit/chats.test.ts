@@ -9,6 +9,7 @@ import type { PopdEvent } from "../../src/shared/types"
 
 class StalledBackend implements Backend {
   interrupted = 0
+  removed: string[] = []
   status() {
     return "ready" as const
   }
@@ -50,6 +51,9 @@ class StalledBackend implements Backend {
   async interrupt() {
     this.interrupted++
   }
+  async removeSession(sessionID: string) {
+    this.removed.push(sessionID)
+  }
 }
 
 const dirs: string[] = []
@@ -60,7 +64,12 @@ function tempDir(): string {
 }
 
 class CompletingBackend implements Backend {
-  constructor(private readonly text = "Done — your result is ready.") {}
+  removed: string[] = []
+  private calls = 0
+  constructor(
+    private readonly text = "Done — your result is ready.",
+    private readonly runningTicks = 0,
+  ) {}
   status() {
     return "ready" as const
   }
@@ -86,7 +95,12 @@ class CompletingBackend implements Backend {
   }
   async prompt() {}
   async session(): Promise<BackendSessionState> {
-    return { id: "session-ok", outcome: "succeeded", updated: Date.now() }
+    this.calls++
+    return {
+      id: "session-ok",
+      outcome: this.calls > this.runningTicks ? "succeeded" : undefined,
+      updated: Date.now(),
+    }
   }
   async forms(): Promise<BackendForm[]> {
     return []
@@ -100,6 +114,9 @@ class CompletingBackend implements Backend {
     return [{ type: "assistant", text: this.text, tools: ["write"], at: Date.now() }]
   }
   async interrupt() {}
+  async removeSession(sessionID: string) {
+    this.removed.push(sessionID)
+  }
 }
 
 beforeEach(() => {
@@ -207,6 +224,93 @@ describe("chat manager", () => {
 
     const done = events.find((event) => event.type === "chat-done")
     expect(done && done.type === "chat-done" ? done.apiKeyRequest?.service : null).toBe("demo")
+    chats.stopAll()
+  })
+
+  it("reports busy while a run is active", async () => {
+    const backend = new CompletingBackend()
+    const base = tempDir()
+    const docs = tempDir()
+    const events: PopdEvent[] = []
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, docs),
+      indexPath: path.join(base, "chats.json"),
+      emit: (event) => events.push(event),
+    })
+
+    const chat = chats.create("busy test")
+    await chats.send(chat.id, "make something")
+    expect(events.some((event) => event.type === "busy-changed" && event.busy)).toBe(true)
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    expect(events.some((event) => event.type === "busy-changed" && !event.busy)).toBe(true)
+    chats.stopAll()
+  })
+
+  it("renames a chat", () => {
+    const backend = new CompletingBackend()
+    const base = tempDir()
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, tempDir()),
+      indexPath: path.join(base, "chats.json"),
+      emit: () => {},
+    })
+    const chat = chats.create("old name")
+    expect(chats.create("finance thing", "finance").agent).toBe("finance")
+    chats.rename(chat.id, "  new name  ")
+    expect(chats.find(chat.id)?.title).toBe("new name")
+    chats.stopAll()
+  })
+
+  it("removes the engine session when a chat is deleted", async () => {
+    const backend = new CompletingBackend()
+    const base = tempDir()
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, tempDir()),
+      indexPath: path.join(base, "chats.json"),
+      emit: () => {},
+    })
+    const chat = chats.create("delete me")
+    await chats.send(chat.id, "make something")
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await chats.remove(chat.id)
+    expect(backend.removed).toContain("session-ok")
+    expect(chats.find(chat.id)).toBeUndefined()
+    chats.stopAll()
+  })
+
+  it("re-attaches to a run that was still going after a restart", async () => {
+    const backend = new CompletingBackend("Done — your result is ready.", 2)
+    const base = tempDir()
+    const docs = tempDir()
+    const indexPath = path.join(base, "chats.json")
+    const workspace = path.join(docs, "PopPD", "interrupted")
+    fs.mkdirSync(workspace, { recursive: true })
+    fs.writeFileSync(path.join(workspace, "index.html"), "<!doctype html>")
+    fs.writeFileSync(
+      indexPath,
+      JSON.stringify([
+        { id: "chat-restart", title: "interrupted", workspace, createdAt: 1, updatedAt: 1, sessionID: "session-ok" },
+      ]),
+    )
+
+    const events: PopdEvent[] = []
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, docs),
+      indexPath,
+      emit: (event) => events.push(event),
+    })
+
+    await chats.recover()
+    expect(events.some((event) => event.type === "busy-changed" && event.busy)).toBe(true)
+
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    expect(events.some((event) => event.type === "chat-done")).toBe(true)
+    expect(fs.existsSync(path.join(workspace, "Open this.bat"))).toBe(true)
     chats.stopAll()
   })
 })

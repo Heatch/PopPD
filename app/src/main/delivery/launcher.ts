@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -96,6 +95,11 @@ export function sweepScaffolding(dir: string): number {
   return moved
 }
 
+/** Escapes a filename for use inside a quoted `start` argument in a .bat file. */
+export function batEscape(name: string): string {
+  return name.replace(/[\r\n"]/g, "").replace(/%/g, "%%")
+}
+
 /**
  * The shell-side last-mile guarantee: always leave an `Open this.bat` pointing at the
  * main delivery (web page, PDF, sheet, image, video…). The model is not relied on.
@@ -107,7 +111,7 @@ export function ensureLauncher(dir: string): { path: string; auto: boolean } | n
   const target = mainArtifactPath(dir)
   if (!target) return null
   const launcher = path.join(dir, "Open this.bat")
-  fs.writeFileSync(launcher, `@echo off\r\nstart "" "%~dp0${path.basename(target)}"\r\n`)
+  fs.writeFileSync(launcher, `@echo off\r\nstart "" "%~dp0${batEscape(path.basename(target))}"\r\n`)
   return { path: launcher, auto: true }
 }
 
@@ -122,26 +126,4 @@ export function mainArtifactPath(dir: string): string | null {
       /\.(pdf|png|jpe?g|webp|svg|xlsx|csv|pptx|docx|mp4|mov|webm|mp3|wav)$/i.test(file),
     ) ?? null
   )
-}
-
-export function openPath(target: string): void {
-  const child =
-    process.platform === "win32"
-      ? spawn("cmd.exe", ["/c", "start", "", target], { detached: true, stdio: "ignore", windowsHide: true })
-      : process.platform === "darwin"
-        ? spawn("open", [target], { detached: true, stdio: "ignore" })
-        : spawn("xdg-open", [target], { detached: true, stdio: "ignore" })
-  child.once("error", () => {})
-  child.unref()
-}
-
-export function showInFolder(target: string): void {
-  const child =
-    process.platform === "win32"
-      ? spawn("explorer.exe", [`/select,${target}`], { detached: true, stdio: "ignore" })
-      : process.platform === "darwin"
-        ? spawn("open", ["-R", target], { detached: true, stdio: "ignore" })
-        : spawn("xdg-open", [path.dirname(target)], { detached: true, stdio: "ignore" })
-  child.once("error", () => {})
-  child.unref()
 }

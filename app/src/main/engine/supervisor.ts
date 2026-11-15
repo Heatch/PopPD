@@ -30,6 +30,7 @@ export class EngineSupervisor extends EventEmitter {
   private restarting = false
   private stopping = false
   private logFile: string
+  engineVersion = ""
 
   constructor(private options: SupervisorOptions) {
     super()
@@ -121,6 +122,11 @@ export class EngineSupervisor extends EventEmitter {
               authorization: "Basic " + Buffer.from(`opencode:${password}`).toString("base64"),
             }
             this.client = OpenCode.make({ baseUrl: url!, headers })
+            void this.client.server.info()
+              .then((info: any) => {
+                this.engineVersion = String(info?.version ?? "")
+              })
+              .catch(() => {})
             this.setStatus("ready")
             this.startHealth()
             resolve()

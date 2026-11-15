@@ -28,6 +28,8 @@ export interface ChatSummary {
   updatedAt: number
   /** Engine session, kept internal to the main process. */
   sessionID?: string
+  /** Which persona built it (defaults to pop). */
+  agent?: string
 }
 
 export interface ChatMessage {
@@ -139,6 +141,7 @@ export type PopdEvent =
   | { type: "chat-error"; chatId: string; message: string; retryable: boolean }
   | { type: "chats-changed" }
   | { type: "library-changed" }
+  | { type: "busy-changed"; busy: boolean }
   | { type: "open-chat"; chatId: string }
   | { type: "update-state"; state: UpdateState }
 
@@ -147,7 +150,7 @@ export interface PopdApi {
     settings: Settings
     engine: EngineStatus
     chats: ChatSummary[]
-    versions: { app: string; rules?: boolean }
+    versions: { app: string; rules?: boolean; engine?: string }
   }>
   saveSettings(patch: Partial<Settings>): Promise<Settings>
   connectKey(key: string): Promise<{ ok: boolean; error?: string }>
@@ -155,7 +158,8 @@ export interface PopdApi {
   checkKey(): Promise<{ ok: boolean; text: string }>
   testPersona(): Promise<{ ok: boolean; text: string }>
   listModels(): Promise<ModelOption[]>
-  createChat(title?: string): Promise<ChatSummary>
+  createChat(title?: string, agent?: string): Promise<ChatSummary>
+  renameChat(id: string, title: string): Promise<void>
   deleteChat(id: string): Promise<void>
   listChats(): Promise<ChatSummary[]>
   getChat(id: string): Promise<{ chat: ChatSummary; messages: ChatMessage[] }>

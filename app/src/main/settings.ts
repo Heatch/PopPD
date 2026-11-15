@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import type { Settings } from "../shared/types"
+import { readJson, writeJson } from "./storage"
 
 export const DEFAULT_MODEL = "opencode-go/deepseek-v4.1-flash"
 
@@ -23,12 +24,7 @@ export class SettingsStore {
   constructor(baseDir: string, documentsDir: string) {
     this.file = path.join(baseDir, "settings.json")
     const defaults = defaultSettings(documentsDir)
-    let stored: Partial<Settings> = {}
-    try {
-      stored = JSON.parse(fs.readFileSync(this.file, "utf8"))
-    } catch {
-      stored = {}
-    }
+    const stored = readJson<Partial<Settings>>(this.file, {})
     this.value = { ...defaults, ...stored, mcpServers: { ...defaults.mcpServers, ...(stored.mcpServers ?? {}) } }
   }
 
@@ -38,8 +34,7 @@ export class SettingsStore {
 
   save(patch: Partial<Settings>): Settings {
     this.value = { ...this.value, ...patch }
-    fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    fs.writeFileSync(this.file, JSON.stringify(this.value, null, 2))
+    writeJson(this.file, this.value)
     return this.value
   }
 

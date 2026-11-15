@@ -42,6 +42,8 @@ export function Chat({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [title, setTitle] = useState("")
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState("")
   const [progress, setProgress] = useState<{ line: string; elapsedMs: number } | null>(null)
   const [question, setQuestion] = useState<Question | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -158,6 +160,47 @@ export function Chat({
           ← Back
         </button>
         <div className="chat-title">{title || "Your chat"}</div>
+        <button
+          className="btn link small"
+          aria-label="Rename chat"
+          onClick={() => {
+            setTitleDraft(title)
+            setEditingTitle(true)
+          }}
+        >
+          ✎
+        </button>
+        {editingTitle && (
+          <div className="row" style={{ marginLeft: 8 }}>
+            <input
+              className="input"
+              style={{ width: 220 }}
+              value={titleDraft}
+              autoFocus
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void window.popd.renameChat(chatId, titleDraft).then(() => {
+                    setTitle(titleDraft.trim() || title)
+                    setEditingTitle(false)
+                  })
+                }
+                if (event.key === "Escape") setEditingTitle(false)
+              }}
+            />
+            <button
+              className="btn small"
+              onClick={() =>
+                void window.popd.renameChat(chatId, titleDraft).then(() => {
+                  setTitle(titleDraft.trim() || title)
+                  setEditingTitle(false)
+                })
+              }
+            >
+              Save
+            </button>
+          </div>
+        )}
         <span className="spacer" />
         {engine !== "ready" && (
           <span className={`engine-pill ${engine}`}>

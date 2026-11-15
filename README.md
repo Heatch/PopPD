@@ -19,6 +19,9 @@ and hands you something you open with one click.
 - **Guardrails that hold.** Writes outside the workspace and secret reads are denied by
   engine config; a message sanitizer strips developer-speak before it reaches the user;
   API keys are collected through a guided dialog; a low-disk warning runs before jobs.
+- **Runs survive.** Closing the window keeps a task going in the tray; restarting PopPD
+  re-attaches unfinished runs; indexes are crash-safe and file actions use Electron's
+  shell APIs, so a hostile filename cannot inject a command.
 - **Settings for the person who set it up.** Model, key (with a check), MCP manager,
   usage and estimated spend, storage + archive, notifications, self-updating, logs,
   diagnostics.

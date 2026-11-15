@@ -38,6 +38,12 @@ test("onboarding → make something → library → settings", async () => {
     await expect(page.getByText("index.html").first()).toBeVisible()
     await expect(page.getByRole("button", { name: "Open" }).first()).toBeVisible()
 
+    // Rename the chat from its header.
+    await page.getByRole("button", { name: "Rename chat" }).click()
+    await page.locator(".chat-header input").fill("Focus timer")
+    await page.locator(".chat-header input").press("Enter")
+    await expect(page.locator(".chat-title")).toHaveText("Focus timer")
+
     // Your stuff: the same result appears in the library.
     await page.getByRole("button", { name: "← Back" }).click()
     await page.getByRole("button", { name: "Your stuff" }).click()

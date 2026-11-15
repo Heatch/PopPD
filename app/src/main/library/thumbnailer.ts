@@ -17,6 +17,25 @@ const HTML = /\.html?$/i
 export class ElectronThumbnailer implements Thumbnailer {
   constructor(private cacheDir: string) {
     fs.mkdirSync(cacheDir, { recursive: true })
+    this.prune()
+  }
+
+  private prune() {
+    try {
+      const files = fs
+        .readdirSync(this.cacheDir)
+        .map((name) => ({ name, at: fs.statSync(path.join(this.cacheDir, name)).mtimeMs }))
+        .sort((a, b) => b.at - a.at)
+      for (const entry of files.slice(300)) {
+        try {
+          fs.unlinkSync(path.join(this.cacheDir, entry.name))
+        } catch {
+          // another process may have removed it
+        }
+      }
+    } catch {
+      // a missing cache dir is fine
+    }
   }
 
   async ensure(file: string): Promise<string | null> {

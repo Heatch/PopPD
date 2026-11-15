@@ -12,10 +12,15 @@ extraResources:
     to: popd-plugin
   - from: resources/popd-rules.md
     to: popd-rules.md
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon-256.png
+    to: icon-256.png
   - from: resources/engine
     to: engine
 win:
   target: nsis
+  icon: resources/icon-256.png
   artifactName: PopPD-Setup-${version}.${ext}
 publish:
   - provider: github

@@ -72,14 +72,18 @@ export class OpenCodeBackend implements Backend {
     }
   }
 
-  async createSession(input: { title: string; directory: string; model: string }): Promise<string> {
+  async createSession(input: { title: string; directory: string; model: string; agent?: string }): Promise<string> {
     const session = await this.client().session.create({
       title: input.title,
-      agent: "pop",
+      agent: input.agent ?? "pop",
       model: parseModel(input.model),
       location: { directory: input.directory },
     })
     return String(session.id)
+  }
+
+  async removeSession(sessionID: string): Promise<void> {
+    await this.client().session.remove({ sessionID })
   }
 
   async prompt(sessionID: string, text: string): Promise<void> {
@@ -88,10 +92,12 @@ export class OpenCodeBackend implements Backend {
 
   async session(sessionID: string): Promise<BackendSessionState> {
     const info: any = await this.client().session.get({ sessionID })
+    const error = info?.error ? JSON.stringify(info.error).slice(0, 400) : undefined
     return {
       id: sessionID,
       outcome: info?.outcome,
       updated: Number(info?.time?.updated ?? Date.now()),
+      error,
     }
   }
 

@@ -3,6 +3,7 @@ import path from "node:path"
 import type { ChatSummary, LibraryEntry } from "../../shared/types"
 import { artifactKind, listArtifacts } from "../delivery/artifacts"
 import { mainArtifactPath } from "../delivery/launcher"
+import { readJson, writeJson } from "../storage"
 import type { Thumbnailer } from "./thumbnailer"
 
 export class Library {
@@ -18,20 +19,15 @@ export class Library {
   }
 
   private load() {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(this.options.indexPath, "utf8"))
-      if (Array.isArray(parsed)) {
-        for (const entry of parsed) this.entries.set(entry.chatId, entry)
-      }
-    } catch {
-      this.entries = new Map()
+    const parsed = readJson<LibraryEntry[]>(this.options.indexPath, [])
+    if (Array.isArray(parsed)) {
+      for (const entry of parsed) this.entries.set(entry.chatId, entry)
     }
   }
 
   private save() {
     try {
-      fs.mkdirSync(path.dirname(this.options.indexPath), { recursive: true })
-      fs.writeFileSync(this.options.indexPath, JSON.stringify(this.list(), null, 2))
+      writeJson(this.options.indexPath, this.list())
     } catch {
       // the library is a convenience; never fail a run because of it
     }

@@ -35,6 +35,21 @@ The agent writes deliverables into `Documents\PopPD\<chat name>\`. The shell gua
   offending lines and code fences are stripped and logged in `logs/guardrails.log`.
 - **Preflight**: a low-disk warning before a run starts.
 
+## Reliability & safety
+
+- **A run survives the window.** Closing the window while PopPD is working hides it
+  to the tray; the task finishes and a notification brings you back. The machine is
+  kept awake while it works.
+- **A run survives a restart.** On launch, unfinished engine sessions are re-attached
+  and delivered normally (launcher, library entry, notification).
+- **Crash-safe indexes.** `settings.json`, `chats.json` and `library.json` are written
+  atomically with a `.bak` fallback; a crash dialog offers a diagnostics export.
+- **No shell interpolation.** Open/reveal use Electron's `shell` APIs, and the
+  generated launcher escapes hostile filenames (percent signs, quotes, control chars).
+- **Packaged CSP**: the production renderer runs under a Content-Security-Policy.
+- **Clean deletes.** Removing or archiving a chat also removes its engine session, so
+  the engine database does not grow forever.
+
 ## Architecture
 
 ```
@@ -89,8 +104,19 @@ npm run package                   # unpacked build in dist/win-unpacked
 npm run package:installer         # NSIS installer in dist/
 ```
 
-## Environment (tests and demos)
+## Releasing
 
+```bash
+node scripts/release.mjs --dry --version 0.2.0   # print every step, change nothing
+node scripts/release.mjs --version 0.2.0         # build, tag, push, upload
+```
+
+It bumps the version, copies the engine, builds the NSIS installer, computes the
+SHA-256, commits and tags `vX.Y.Z`, pushes, then creates a GitHub release (via `gh`
+when available, otherwise it prints the upload steps). The engine version is pinned
+per release and shown in Settings.
+
+## Environment (tests and demos)
 | Variable | Effect |
 | --- | --- |
 | `POPD_MOCK=1` | Use the scripted backend (no model calls) |
@@ -110,6 +136,7 @@ npm run package:installer         # NSIS installer in dist/
 | M3 delivery | `tests/unit/launcher.test.ts` (web + non-web + marker + scaffold sweep), `tests/unit/delivery.test.ts`, e2e artifact + library |
 | M4 settings + ops | e2e settings (MCP, usage, updates, logs), `tests/unit/config.test.ts`, diagnostics handler |
 | M5 hardening | `npm run test:e2e` (dev + packaged), `POPD_REAL=1` real-engine run, workspace-escape guard |
+| Essentials | `tests/unit/storage.test.ts` (atomic + backup), `tests/unit/errors.test.ts`, e2e tray/close + re-attach (unit), rename |
 
 ## Known limits (deliberate)
 

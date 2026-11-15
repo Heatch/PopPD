@@ -5,8 +5,9 @@ import path from "node:path"
 import type { LibraryEntry, PopdEvent, Settings } from "../shared/types"
 import type { Backend } from "./backend/types"
 import type { ChatManager } from "./chats"
-import { openPath, showInFolder } from "./delivery/launcher"
+import { openExternal, openPath, showInFolder } from "./delivery/shell"
 import { walk } from "./delivery/launcher"
+import { writeDiagnostics } from "./diagnostics"
 import { buildEngineConfig } from "./engine/config"
 import { probePersona, rulesFileLooksValid } from "./engine/persona"
 import type { EngineSupervisor } from "./engine/supervisor"
@@ -78,7 +79,11 @@ export function registerIpc(deps: IpcDeps) {
     settings: settings.get(),
     engine: backend.status(),
     chats: chats.list(),
-    versions: { app: appVersion(), rules: rulesFileLooksValid(rulesPath()).ok },
+    versions: {
+      app: appVersion(),
+      rules: rulesFileLooksValid(rulesPath()).ok,
+      engine: supervisor.engineVersion,
+    },
   }))
 
   ipcMain.handle("popd:settings:save", async (_event, patch: Partial<Settings>) => {
@@ -151,7 +156,8 @@ export function registerIpc(deps: IpcDeps) {
 
   ipcMain.handle("popd:models", () => backend.listModels())
   ipcMain.handle("popd:chats:list", () => chats.list())
-  ipcMain.handle("popd:chats:create", (_event, title?: string) => chats.create(title))
+  ipcMain.handle("popd:chats:create", (_event, title?: string, agent?: string) => chats.create(title, agent))
+  ipcMain.handle("popd:chats:rename", (_event, id: string, title: string) => chats.rename(id, title))
   ipcMain.handle("popd:chats:delete", (_event, id: string) => chats.remove(id))
   ipcMain.handle("popd:chats:get", async (_event, id: string) => {
     const chat = chats.find(id)
@@ -167,7 +173,7 @@ export function registerIpc(deps: IpcDeps) {
   ipcMain.handle("popd:chats:usage", () => chats.usage())
 
   ipcMain.handle("popd:artifact:open", (_event, target: string) => {
-    if (insideWorkspace(target) && fs.existsSync(target)) openPath(target)
+    if (insideWorkspace(target) && fs.existsSync(target)) return openPath(target)
   })
   ipcMain.handle("popd:artifact:show", (_event, target: string) => {
     if (insideWorkspace(target) && fs.existsSync(target)) showInFolder(target)
@@ -175,11 +181,11 @@ export function registerIpc(deps: IpcDeps) {
   ipcMain.handle("popd:folder:open", (_event, target: string) => {
     const root = path.resolve(settings.get().workspaceRoot)
     const resolved = path.resolve(target)
-    if ((resolved === root || resolved.startsWith(root + path.sep)) && fs.existsSync(resolved)) openPath(resolved)
+    if ((resolved === root || resolved.startsWith(root + path.sep)) && fs.existsSync(resolved)) {
+      return openPath(resolved)
+    }
   })
-  ipcMain.handle("popd:open-external", (_event, url: string) => {
-    if (/^https?:\/\//i.test(url)) openPath(url)
-  })
+  ipcMain.handle("popd:open-external", (_event, url: string) => openExternal(url))
 
   ipcMain.handle("popd:library:list", () => refreshLibrary())
   ipcMain.handle("popd:library:refresh", () => refreshLibrary())
@@ -199,7 +205,7 @@ export function registerIpc(deps: IpcDeps) {
     }
   })
 
-  ipcMain.handle("popd:workspace:archive", (_event, chatId: string) => {
+  ipcMain.handle("popd:workspace:archive", async (_event, chatId: string) => {
     const chat = chats.find(chatId)
     if (!chat) return { ok: false, error: "Unknown chat" }
     try {
@@ -207,7 +213,7 @@ export function registerIpc(deps: IpcDeps) {
       fs.mkdirSync(archiveRoot, { recursive: true })
       const target = path.join(archiveRoot, `${path.basename(chat.workspace)}-${Date.now()}`)
       fs.renameSync(chat.workspace, target)
-      chats.remove(chatId)
+      await chats.remove(chatId)
       return { ok: true, path: target }
     } catch (error) {
       return { ok: false, error: (error as Error)?.message ?? String(error) }
@@ -228,22 +234,18 @@ export function registerIpc(deps: IpcDeps) {
     await backend.restart()
   })
 
-  ipcMain.handle("popd:diagnostics", async () => {
-    const target = path.join(app.getPath("documents"), `PopPD-diagnostics-${Date.now()}.json`)
-    const payload = {
-      at: new Date().toISOString(),
-      app: appVersion(),
-      platform: { os: process.platform, release: os.release(), arch: process.arch },
-      engineBinary: engineBinary(),
+  ipcMain.handle("popd:diagnostics", () => {
+    const logs = getLogs()
+    return writeDiagnostics({
       settings: settings.get(),
       chats: chats.list(),
       library: library.list(),
       updates: updates.get(),
-      engineLogs: (getLogs().engine ?? "").slice(-40_000),
-      pluginLogs: (getLogs().plugin ?? "").slice(-20_000),
-    }
-    fs.writeFileSync(target, JSON.stringify(payload, null, 2))
-    return target
+      versions: { app: appVersion(), engine: supervisor.engineVersion, rules: rulesFileLooksValid(rulesPath()).ok },
+      engineLogs: logs.engine,
+      pluginLogs: logs.plugin,
+      crash: undefined,
+    })
   })
 
   ipcMain.handle("popd:emit-ping", () => emit({ type: "chats-changed" }))

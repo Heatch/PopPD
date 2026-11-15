@@ -75,4 +75,12 @@ describe("launcher guarantee", () => {
     expect(fs.existsSync(path.join(dir, "_test.mjs"))).toBe(false)
     expect(fs.existsSync(path.join(dir, "_work", "_test.mjs"))).toBe(true)
   })
+
+  it("escapes percent signs in the launcher target", () => {
+    const dir = tempDir()
+    fs.writeFileSync(path.join(dir, "100% done.html"), "")
+    ensureLauncher(dir)
+    const bat = fs.readFileSync(path.join(dir, "Open this.bat"), "utf8")
+    expect(bat).toContain('start "" "%~dp0100%% done.html"')
+  })
 })

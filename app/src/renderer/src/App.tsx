@@ -16,7 +16,7 @@ export function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [engine, setEngine] = useState<EngineStatus>("starting")
   const [chats, setChats] = useState<ChatSummary[]>([])
-  const [versions, setVersions] = useState<{ app: string; rules?: boolean }>({ app: "" })
+  const [versions, setVersions] = useState<{ app: string; rules?: boolean; engine?: string }>({ app: "" })
   const [screen, setScreen] = useState<Screen>({ name: "home" })
 
   const refresh = useCallback(async () => {

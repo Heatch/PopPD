@@ -28,7 +28,7 @@ export function SettingsScreen({
   onSaved,
 }: {
   settings: Settings
-  versions: { app: string; rules?: boolean }
+  versions: { app: string; rules?: boolean; engine?: string }
   onClose: () => void
   onSaved: () => Promise<void> | void
 }) {
@@ -194,7 +194,10 @@ export function SettingsScreen({
           ← Back
         </button>
         <span className="spacer" />
-        <span className="muted">PopPD {versions.app}</span>
+        <span className="muted">
+          PopPD {versions.app}
+          {versions.engine ? ` · builder ${versions.engine}` : ""}
+        </span>
       </div>
 
       <h1>Settings</h1>
