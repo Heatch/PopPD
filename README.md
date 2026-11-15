@@ -4,9 +4,24 @@
 You describe what you want in plain words; PopPD decides the technical details, builds it,
 and hands you something you open with one click.
 
-> **Status: Phase 0 complete (spike).** This repository contains the evidence harness and
-> the findings from the spike that validated the approach. The product (desktop shell,
-> settings, artifact library) is not built yet — see [Roadmap](#roadmap).
+> **Status: shell core + delivery, guardrails and settings complete.** The spike
+> validated the loop; the Electron app now ships chat, a cross-chat artifact library,
+> layered guardrails, and a full settings/ops surface with the engine bundled.
+> See [`app/README.md`](app/README.md) and the spike report in
+> [`spike/evidence/EVIDENCE.md`](spike/evidence/EVIDENCE.md).
+
+## What the app does
+
+- **Make things in plain words.** Chat with friendly progress; one clarifying question
+  at most; finished things open with one click.
+- **Your stuff.** Every artifact across chats, with real thumbnails (web pages are
+  screenshotted in a hidden window), open and reveal actions.
+- **Guardrails that hold.** Writes outside the workspace and secret reads are denied by
+  engine config; a message sanitizer strips developer-speak before it reaches the user;
+  API keys are collected through a guided dialog; a low-disk warning runs before jobs.
+- **Settings for the person who set it up.** Model, key (with a check), MCP manager,
+  usage and estimated spend, storage + archive, notifications, self-updating, logs,
+  diagnostics.
 
 ## What the spike proved
 
@@ -42,6 +57,12 @@ Read the full report: **[`spike/evidence/EVIDENCE.md`](spike/evidence/EVIDENCE.m
 
 ```
 .
+├─ app/                    Phase 1 desktop shell (Electron + React)
+│  ├─ src/main/            engine supervisor · config · chats · delivery · settings
+│  ├─ src/preload/         narrow contextBridge API
+│  ├─ src/renderer/        Onboarding · Home · Chat · Settings
+│  ├─ resources/           constitution, last-mile plugin, bundled engine (gitignored)
+│  └─ tests/               unit · real-engine integration · Electron e2e
 ├─ spike/                  Phase 0 evidence harness
 │  ├─ opencode.jsonc       model pin · one `pop` agent · permissions · MCP policy
 │  ├─ setup.mjs            resolves the absolute instruction path (required)
@@ -58,6 +79,20 @@ Read the full report: **[`spike/evidence/EVIDENCE.md`](spike/evidence/EVIDENCE.m
 ```
 
 ## Quick start
+
+### Desktop app
+
+```bash
+cd app
+npm install
+node scripts/prepare-engine.mjs   # copies your opencode binary into resources/engine
+npm run dev                       # or: npm run package:installer
+```
+
+The app bundles its own engine and keeps it running; the first launch asks for the key
+once. Tests: `npm test`, `npm run test:integration`, `npm run test:e2e`.
+
+### Spike harness
 
 Prerequisites:
 

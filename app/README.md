@@ -1,0 +1,120 @@
+# PopPD — desktop shell (Phase 1)
+
+The app a non-technical person uses: one window, a chat, and finished things that open
+with one click. It bundles its own OpenCode engine and keeps every developer surface out
+of sight.
+
+**Status: complete (shell + delivery, guardrails, settings/ops).** Chat, the cross-chat
+library with thumbnails, layered guardrails, and the full settings surface are
+implemented and covered by unit, integration, Electron e2e, and real-engine tests.
+
+## What it does
+
+1. First run: one masked key field, stored by the engine (`integration.connect.key`).
+2. Home: "What should we make today?" plus recent chats.
+3. Chat: plain-language progress, one clarifying-question card, artifact cards with
+   **Open** / **Show in folder**, a guided API-key dialog, a retry card, and a
+   developer handoff card when needed.
+4. **Your stuff**: every finished thing across chats, with real thumbnails (web pages
+   are screenshot in a hidden window), filters by recency, and one-click open.
+5. Settings: model, key (with a check), MCP manager, usage and estimated spend,
+   storage + archive, notifications, updates, logs, diagnostics.
+
+The agent writes deliverables into `Documents\PopPD\<chat name>\`. The shell guarantees
+`Open this.bat`, moves scaffolding into `_work/`, and auto-opens the main artifact.
+
+## Guardrails
+
+- **Constitution v1** (`resources/popd-rules.md`): plain language, no commands, never
+  touch files outside the workspace, ask for keys through the dialog, three escalation
+  cases only.
+- **Engine permissions**: writes outside the workspace are denied, `.env`/credential
+  reads are denied, destructive shell is denied. Everything inside the workspace stays
+  autonomous.
+- **Message sanitizer**: the spike's dev-speak detector runs on every final message;
+  offending lines and code fences are stripped and logged in `logs/guardrails.log`.
+- **Preflight**: a low-disk warning before a run starts.
+
+## Architecture
+
+```
+app/
+├─ src/main/
+│  ├─ index.ts            window, lifecycle, single-instance lock
+│  ├─ ipc.ts              typed IPC surface (invoke + events)
+│  ├─ settings.ts         %APPDATA%\PopPD\settings.json
+│  ├─ chats.ts            chat index, run loop, question/permission sweeps, watchdog
+│  ├─ backend/
+│  │  ├─ types.ts         the engine boundary (real + mock implement it)
+│  │  ├─ opencode.ts      OpenCode client implementation
+│  │  └─ mock.ts          scripted engine for UI tests and demos
+│  ├─ engine/
+│  │  ├─ supervisor.ts    spawn · drain · health · restart · config injection
+│  │  ├─ config.ts        the PopPD config (absolute paths!)
+│  │  ├─ persona.ts       rules-file check + "who are you" probe
+│  │  └─ progress.ts      tool → plain-language line
+│  └─ delivery/
+│     ├─ workspace.ts     Documents\PopPD\<slug>, no reuse of non-empty folders
+│     ├─ launcher.ts      Open this.bat guarantee, open, show in folder
+│     └─ artifacts.ts     output detection and ordering
+├─ src/preload/index.ts   contextBridge API (no Node in the renderer)
+├─ src/renderer/          React screens: Onboarding · Home · Chat · Settings
+└─ resources/             constitution, plugin, bundled engine (engine is gitignored)
+```
+
+### Engine handling (from the spike)
+
+- Spawn `opencode serve --hostname 127.0.0.1 --port 0`, parse URL + password, keep
+  **draining** stdout/stderr (an unread pipe freezes the engine), health-check every
+  10 s, restart with a 3-per-5-minutes budget.
+- Config is injected with `OPENCODE_CONFIG_CONTENT`; `instructions` and the plugin path
+  are **absolute**. A relative instruction path is silently ignored by OpenCode — the
+  persona probe catches that.
+- Completion comes from `session.get().outcome`; the event stream is display-only.
+- A 4-minute no-progress watchdog interrupts and offers a retry.
+- Budget is computed from tokens (`session.cost` is always 0 on Go).
+
+## Scripts
+
+```bash
+npm install
+node scripts/prepare-engine.mjs   # copies the opencode binary into resources/engine
+npm run dev                       # electron-vite dev
+npm run build                     # production bundles in out/
+npm run typecheck
+npm test                          # unit tests
+npm run test:integration          # real engine persona check (one small model call)
+npm run test:e2e                  # Electron UI e2e (mock engine)
+npm run package                   # unpacked build in dist/win-unpacked
+npm run package:installer         # NSIS installer in dist/
+```
+
+## Environment (tests and demos)
+
+| Variable | Effect |
+| --- | --- |
+| `POPD_MOCK=1` | Use the scripted backend (no model calls) |
+| `POPD_MOCK_SPEED=0.2` | Speed the mock up |
+| `POPD_USER_DATA` / `POPD_DOCUMENTS` / `POPD_WORKSPACE` | Isolate settings, docs, workspace |
+| `POPD_NO_OPEN=1` | Never launch external apps |
+| `POPD_REAL=1` | Run the real-engine e2e spec |
+| `POPD_STALL_MS` / `POPD_POLL_MS` | Watchdog tuning (used by tests) |
+| `OPENCODE_BIN` | Engine binary override for packaging |
+
+## Verification map
+
+| Milestone | Covered by |
+| --- | --- |
+| M1 skeleton + engine | `tests/unit/config.test.ts`, integration persona test, supervisor in every e2e |
+| M2 chat | e2e onboarding → chat → result; `tests/unit/chats.test.ts` (watchdog, sanitizer, API-key request) |
+| M3 delivery | `tests/unit/launcher.test.ts` (web + non-web + marker + scaffold sweep), `tests/unit/delivery.test.ts`, e2e artifact + library |
+| M4 settings + ops | e2e settings (MCP, usage, updates, logs), `tests/unit/config.test.ts`, diagnostics handler |
+| M5 hardening | `npm run test:e2e` (dev + packaged), `POPD_REAL=1` real-engine run, workspace-escape guard |
+
+## Known limits (deliberate)
+
+- Windows only; the installer is unsigned for now (SmartScreen warns once).
+- The bundled engine makes the installer large (~250 MB).
+- Self-update checks GitHub releases; publishing a release is still manual.
+- MCP configuration is a developer-only screen (form + status; no OAuth wizard).
+- English only.

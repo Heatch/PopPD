@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+resources/engine/
+*.log
+.playwright/
+test-results/
+playwright-report/

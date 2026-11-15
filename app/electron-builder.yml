@@ -1,0 +1,30 @@
+appId: dev.popd.app
+productName: PopPD
+copyright: Copyright © 2026
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/popd-plugin
+    to: popd-plugin
+  - from: resources/popd-rules.md
+    to: popd-rules.md
+  - from: resources/engine
+    to: engine
+win:
+  target: nsis
+  artifactName: PopPD-Setup-${version}.${ext}
+publish:
+  - provider: github
+    owner: Heatch
+    repo: PopPD
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PopPD
