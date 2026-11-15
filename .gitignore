@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# harness output: artifacts, event logs, plugin logs, engine passwords
+spike/runs/
+*.log
+
+# local environment
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // PopPD spike project config. In production the app writes this shape into
+  // the OpenCode global config; the merge semantics are identical.
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "default_agent": "pop",
+  // Absolute path required: relative instruction paths resolve against the session
+  // workspace and are silently dropped (this exact trap is documented in evidence/).
+  // Run `node setup.mjs` once to fill this in for your clone.
+  "instructions": ["__POPD_DIR__/instructions/popd-rules.md"],
+  "plugins": [{ "package": "./popd-plugin" }],
+
+  // One mode only: no planning agent, no developer agents in the picker.
+  "agents": {
+    "plan": { "disabled": true },
+    "build": { "hidden": true },
+    "pop": {
+      "mode": "primary",
+      "description": "PopPD builder: turns a plain-language request into a finished, openable artifact",
+      "color": "#ff6b6b"
+    }
+  },
+
+  // Fully autonomous: no approval prompts, ever.
+  "permissions": [
+    { "action": "*", "resource": "*", "effect": "allow" },
+    { "action": "read", "resource": "*.env", "effect": "allow" },
+    { "action": "read", "resource": "*.env.*", "effect": "allow" }
+  ],
+
+  // Keep the agent's tool surface small: no MCP tools in PopPD v0.
+  "policies": [{ "action": "mcp.use", "resource": "*", "effect": "deny" }]
+}

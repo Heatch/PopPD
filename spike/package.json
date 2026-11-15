@@ -1,0 +1,20 @@
+{
+  "name": "popd-spike",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PopPD Phase 0 spike: evidence harness for the OpenCode-driven artifact pipeline",
+  "scripts": {
+    "setup": "node setup.mjs",
+    "config": "node driver.mjs --config-check",
+    "smoke": "node driver.mjs --case smoke --timeout 4 --private",
+    "pomodoro": "node driver.mjs --case pomodoro --timeout 20 --private",
+    "chores": "node driver.mjs --case chores --timeout 20 --private",
+    "matrix": "node run-all.mjs",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "1.19.5",
+    "@opencode/client": "2.3.0"
+  }
+}

@@ -1,0 +1,359 @@
+{
+  "startedAt": "2026-11-15T17:52:26.006Z",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "stages": [
+    {
+      "name": "config-check",
+      "exitCode": 0,
+      "wallMs": 1810,
+      "parsed": {
+        "mode": "config-check",
+        "agents": [],
+        "plugins": [],
+        "mcp": [],
+        "defaultModel": {
+          "providerID": "opencode-go",
+          "id": "deepseek-v4.1-flash"
+        }
+      },
+      "stderr": ""
+    },
+    {
+      "name": "pomodoro-1",
+      "exitCode": 0,
+      "wallMs": 366743,
+      "parsed": {
+        "mode": "run",
+        "case": "pomodoro",
+        "sessionID": "ses_e1fa93048ffeyZZ86Qkd727oRt",
+        "status": "succeeded",
+        "durationMs": 366182,
+        "costUsd": 0,
+        "tokens": {
+          "input": 46960,
+          "output": 13836,
+          "reasoning": 9129,
+          "cache": {
+            "read": 1351680,
+            "write": 0
+          }
+        },
+        "permissionAsks": 0,
+        "forms": 0,
+        "openToolCalled": false,
+        "launcher": null,
+        "files": 1,
+        "lintHard": [],
+        "finalText": "Built and opened: `index.html` (single file, no install, works offline).\n\n**How it works**\n- 25-minute focus stretch → 5-minute break, with a soft chime at each handoff and a brief toast so you notice without staring at it.\n- Big **Start / Pause** button, plus reset and skip. Breaks start on their own (toggle in the card if you'd rather press start yourself); after a break it waits for you.\n- The ring drains as time passes: coral while focusing, teal on break.\n\n**Tracking**\n- The card at the bottom counts **stretches finished today**, with pips that fill in and a running total of focused minutes. It resets at midnight.\n- Count and timer position are saved, so closing the tab or reloading doesn't lose your place — a running timer even keeps counting while the tab is closed.\n\n**While you're working elsewhere**\n- The browser tab title becomes the countdown (`24:13 · Focus`), so you can glance at it from another tab.\n- Shortcuts: `space` start/pause, `R` reset, `S` skip.\n\nI verified the timer logic with a simulated clock (focus → break, counting, reset/skip, midnight rollover, reload mid-session) and checked the layout at desktop and phone widths.",
+        "workspace": "<repo>\\spike\\runs\\pomodoro-2026-11-15T17-52-28-012Z"
+      },
+      "stderr": "",
+      "summary": {
+        "case": "pomodoro",
+        "sessionID": "ses_e1fa93048ffeyZZ86Qkd727oRt",
+        "workspace": "<repo>\\spike\\runs\\pomodoro-2026-11-15T17-52-28-012Z",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "agent": "pop",
+        "status": "succeeded",
+        "sawIdle": false,
+        "durationMs": 366182,
+        "outcome": "succeeded",
+        "costUsd": 0,
+        "tokens": {
+          "input": 46960,
+          "output": 13836,
+          "reasoning": 9129,
+          "cache": {
+            "read": 1351680,
+            "write": 0
+          }
+        },
+        "permissionAsks": [],
+        "forms": [],
+        "toolCalls": [
+          "shell",
+          "write",
+          "execute",
+          "execute",
+          "shell",
+          "execute",
+          "execute",
+          "shell",
+          "shell",
+          "write",
+          "shell",
+          "shell",
+          "edit",
+          "shell",
+          "shell",
+          "shell",
+          "edit",
+          "edit",
+          "shell",
+          "write",
+          "shell",
+          "edit",
+          "shell",
+          "edit",
+          "shell",
+          "shell",
+          "read",
+          "shell",
+          "read",
+          "shell",
+          "read",
+          "write",
+          "shell",
+          "read",
+          "shell",
+          "read",
+          "shell",
+          "shell",
+          "read",
+          "shell",
+          "execute"
+        ],
+        "openToolCalled": false,
+        "files": [
+          {
+            "path": "index.html",
+            "bytes": 20385
+          }
+        ],
+        "launcher": null,
+        "finalText": "Built and opened: `index.html` (single file, no install, works offline).\n\n**How it works**\n- 25-minute focus stretch → 5-minute break, with a soft chime at each handoff and a brief toast so you notice without staring at it.\n- Big **Start / Pause** button, plus reset and skip. Breaks start on their own (toggle in the card if you'd rather press start yourself); after a break it waits for you.\n- The ring drains as time passes: coral while focusing, teal on break.\n\n**Tracking**\n- The card at the bottom counts **stretches finished today**, with pips that fill in and a running total of focused minutes. It resets at midnight.\n- Count and timer position are saved, so closing the tab or reloading doesn't lose your place — a running timer even keeps counting while the tab is closed.\n\n**While you're working elsewhere**\n- The browser tab title becomes the countdown (`24:13 · Focus`), so you can glance at it from another tab.\n- Shortcuts: `space` start/pause, `R` reset, `S` skip.\n\nI verified the timer logic with a simulated clock (focus → break, counting, reset/skip, midnight rollover, reload mid-session) and checked the layout at desktop and phone widths.",
+        "lint": {
+          "hard": [],
+          "soft": [],
+          "passed": true
+        },
+        "estimatedCostUsd": 0.0153
+      }
+    },
+    {
+      "name": "chores",
+      "exitCode": 0,
+      "wallMs": 610952,
+      "parsed": {
+        "mode": "run",
+        "case": "chores",
+        "sessionID": "ses_e1fa397eeffev3y9A8aO2ri5kR",
+        "status": "succeeded",
+        "durationMs": 610575,
+        "costUsd": 0,
+        "tokens": {
+          "input": 89232,
+          "output": 27882,
+          "reasoning": 25950,
+          "cache": {
+            "read": 3456256,
+            "write": 0
+          }
+        },
+        "permissionAsks": 0,
+        "forms": 0,
+        "openToolCalled": false,
+        "launcher": null,
+        "files": 2,
+        "lintHard": [],
+        "finalText": "Built you a chore tracker and opened it: `chores.html` (single file, no install, works offline).\n\n**How it works**\n- Add a chore and pick how often it repeats (daily, every other day, weekly, every 2 weeks, monthly, one-off)\n- Tick the circle to check it off — it reschedules itself and moves to **Done today**\n- Overdue items turn red with a count (\"3 days overdue\"), so nothing quietly slips\n- Repeat completions build a streak (\"5 in a row\"), shown under the title\n- Click a completed circle to undo; double-click a title to rename; `×` deletes\n- Progress bar and done counter at the top reset naturally each day\n\n**Notes**\n- I seeded a few sample chores so you can see it working — delete them or hit **Reset list** to start clean.\n- Everything saves automatically to this browser's local storage; no account, no network. Clearing site data would wipe it, so keep the file where it is.\n- It follows your system light/dark theme and is laid out for both desktop and phone.\n\nI drove the actual page in a headless browser to verify it: 38 checks covering completion, undo, rescheduling, streaks, one-off chores, renaming, deletes, reload persistence, and 360px mobile layout all pass with no console errors.",
+        "workspace": "<repo>\\spike\\runs\\chores-2026-11-15T17-58-34-748Z"
+      },
+      "stderr": "",
+      "summary": {
+        "case": "chores",
+        "sessionID": "ses_e1fa397eeffev3y9A8aO2ri5kR",
+        "workspace": "<repo>\\spike\\runs\\chores-2026-11-15T17-58-34-748Z",
+        "model": "opencode-go/deepseek-v4.1-flash",
+        "agent": "pop",
+        "status": "succeeded",
+        "sawIdle": false,
+        "durationMs": 610575,
+        "outcome": "succeeded",
+        "costUsd": 0,
+        "tokens": {
+          "input": 89232,
+          "output": 27882,
+          "reasoning": 25950,
+          "cache": {
+            "read": 3456256,
+            "write": 0
+          }
+        },
+        "permissionAsks": [],
+        "forms": [],
+        "toolCalls": [
+          "read",
+          "shell",
+          "write",
+          "shell",
+          "edit",
+          "shell",
+          "execute",
+          "execute",
+          "write",
+          "shell",
+          "execute",
+          "shell",
+          "execute",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "read",
+          "shell",
+          "write",
+          "shell",
+          "read",
+          "shell",
+          "shell",
+          "write",
+          "shell",
+          "shell",
+          "edit",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "write",
+          "shell",
+          "shell",
+          "shell",
+          "write",
+          "shell",
+          "shell",
+          "write",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "write",
+          "edit",
+          "read",
+          "edit",
+          "edit",
+          "edit",
+          "edit",
+          "grep",
+          "edit",
+          "read",
+          "shell",
+          "edit",
+          "read",
+          "grep",
+          "edit",
+          "shell",
+          "shell",
+          "edit",
+          "write",
+          "shell",
+          "shell",
+          "shell",
+          "shell",
+          "execute",
+          "write"
+        ],
+        "openToolCalled": false,
+        "files": [
+          {
+            "path": "_filetest.mjs",
+            "bytes": 3208
+          },
+          {
+            "path": "chores.html",
+            "bytes": 19372
+          }
+        ],
+        "launcher": null,
+        "finalText": "Built you a chore tracker and opened it: `chores.html` (single file, no install, works offline).\n\n**How it works**\n- Add a chore and pick how often it repeats (daily, every other day, weekly, every 2 weeks, monthly, one-off)\n- Tick the circle to check it off — it reschedules itself and moves to **Done today**\n- Overdue items turn red with a count (\"3 days overdue\"), so nothing quietly slips\n- Repeat completions build a streak (\"5 in a row\"), shown under the title\n- Click a completed circle to undo; double-click a title to rename; `×` deletes\n- Progress bar and done counter at the top reset naturally each day\n\n**Notes**\n- I seeded a few sample chores so you can see it working — delete them or hit **Reset list** to start clean.\n- Everything saves automatically to this browser's local storage; no account, no network. Clearing site data would wipe it, so keep the file where it is.\n- It follows your system light/dark theme and is laid out for both desktop and phone.\n\nI drove the actual page in a headless browser to verify it: 38 checks covering completion, undo, rescheduling, streaks, one-off chores, renaming, deletes, reload persistence, and 360px mobile layout all pass with no console errors.",
+        "lint": {
+          "hard": [],
+          "soft": [],
+          "passed": true
+        },
+        "estimatedCostUsd": 0.0301
+      }
+    },
+    {
+      "name": "bad-model",
+      "exitCode": 0,
+      "wallMs": 3529,
+      "parsed": {
+        "mode": "run",
+        "case": "smoke",
+        "sessionID": "ses_e1f9a4561ffeZiORBgFxyFViAu",
+        "status": "failed",
+        "durationMs": 3279,
+        "costUsd": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "permissionAsks": 0,
+        "forms": 0,
+        "openToolCalled": false,
+        "launcher": null,
+        "files": 0,
+        "lintHard": [],
+        "finalText": "",
+        "workspace": "<repo>\\spike\\runs\\smoke-2026-11-15T18-08-45-712Z"
+      },
+      "stderr": "",
+      "summary": {
+        "case": "smoke",
+        "sessionID": "ses_e1f9a4561ffeZiORBgFxyFViAu",
+        "workspace": "<repo>\\spike\\runs\\smoke-2026-11-15T18-08-45-712Z",
+        "model": "opencode-go/popd-bad-model",
+        "agent": "pop",
+        "status": "failed",
+        "sawIdle": false,
+        "durationMs": 3279,
+        "outcome": "failed",
+        "costUsd": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "permissionAsks": [],
+        "forms": [],
+        "toolCalls": [],
+        "openToolCalled": false,
+        "files": [],
+        "launcher": null,
+        "finalText": "",
+        "lint": {
+          "hard": [],
+          "soft": [],
+          "passed": true
+        },
+        "estimatedCostUsd": 0
+      }
+    },
+    {
+      "name": "persistence-echo",
+      "exitCode": 0,
+      "wallMs": 385,
+      "parsed": {
+        "mode": "echo",
+        "sessionID": "ses_e1fa93048ffeyZZ86Qkd727oRt",
+        "outcome": "succeeded",
+        "costUsd": 0,
+        "messages": 44,
+        "finalText": "Built and opened: `index.html` (single file, no install, works offline).\n\n**How it works**\n- 25-minute focus stretch → 5-minute break, with a soft chime at each handoff and a brief toast so you notice without staring at it.\n- Big **Start / Pause** button, plus reset and skip. Breaks start on their own (toggle in the card if you'd rather press start yourself); after a break it waits for you.\n- The "
+      },
+      "stderr": ""
+    }
+  ]
+}
