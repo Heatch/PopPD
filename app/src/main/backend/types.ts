@@ -24,6 +24,7 @@ export interface BackendMessage {
   type: "user" | "assistant" | "other"
   text: string
   tools: string[]
+  reasoning?: string
   at: number
 }
 

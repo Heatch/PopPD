@@ -41,16 +41,20 @@ test("real engine: ask who it is and see the PopPD answer", async () => {
 
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole("heading", { name: "What should we make today?" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "What's on your mind?" })).toBeVisible({
       timeout: 30_000,
     })
 
-    await page.getByPlaceholder(/A timer/).fill("Who are you, and what do you do? Answer in one short sentence.")
-    await page.getByRole("button", { name: "Make it →" }).click()
+    await page.getByPlaceholder(/Ask me anything/).fill("Who are you, and what do you do? Answer in one short sentence.")
+    await page.getByRole("button", { name: "Send" }).click()
 
     await expect(page.locator(".msg-assistant").filter({ hasText: /pop+d|friendly builder/i }).first()).toBeVisible({
       timeout: 180_000,
     })
+
+    // A question is conversation, not a build: no result card, no launcher.
+    await expect(page.getByRole("heading", { name: "Your result" })).toHaveCount(0)
+    expect(await page.locator(".artifact").count()).toBe(0)
 
     const body = await page.locator("body").innerText()
     expect(body.toLowerCase()).not.toContain("opencode is")

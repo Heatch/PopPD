@@ -26,6 +26,17 @@ export function toolsLine(tools: string[]): string {
   return friendlyLine(last)
 }
 
+/** A short, readable tail of the model's current reasoning for the progress line. */
+export function summarizeReasoning(text: string): string {
+  const cleaned = (text ?? "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned) return ""
+  return cleaned.length > 200 ? `…${cleaned.slice(-199)}` : cleaned
+}
+
 export function elapsedText(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))
   if (seconds < 60) return `${seconds}s`

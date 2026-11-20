@@ -15,6 +15,7 @@ interface MockSession {
   interrupted?: boolean
   artifactWritten?: boolean
   tools: string[]
+  log: Array<{ prompt: string; at: number }>
 }
 
 const SPEED = Number(process.env.POPD_MOCK_SPEED ?? 1)
@@ -83,8 +84,9 @@ export class MockBackend implements Backend {
       title: input.title,
       directory: input.directory,
       prompt: "",
-      startedAt: 0,
+      startedAt: Date.now(),
       tools: [],
+      log: [],
     })
     return id
   }
@@ -97,7 +99,9 @@ export class MockBackend implements Backend {
     const session = this.get(sessionID)
     session.prompt = text
     session.startedAt = Date.now()
+    session.outcome = undefined
     session.interrupted = false
+    session.log.push({ prompt: text, at: session.startedAt })
     session.form = undefined
     session.formAnsweredAt = undefined
     if (/chore/i.test(text)) {
@@ -123,6 +127,7 @@ export class MockBackend implements Backend {
 
   async session(sessionID: string): Promise<BackendSessionState> {
     const session = this.get(sessionID)
+    if (!session.prompt) return { id: sessionID, outcome: undefined, updated: Date.now() }
     const elapsed = Date.now() - session.startedAt
     const blocked = session.form && !session.formAnsweredAt
     if (!blocked && elapsed > FINISH_MS && !session.outcome) {
@@ -159,17 +164,28 @@ export class MockBackend implements Backend {
 
   async messages(sessionID: string): Promise<BackendMessage[]> {
     const session = this.get(sessionID)
-    const elapsed = Date.now() - session.startedAt
     const messages: BackendMessage[] = []
-    if (session.prompt) {
-      messages.push({ type: "user", text: session.prompt, tools: [], at: session.startedAt })
-      const tools = this.toolsAt(elapsed)
-      messages.push({
-        type: "assistant",
-        text: session.outcome === "succeeded" ? "Done — it's ready." : "",
-        tools,
-        at: session.startedAt + elapsed,
-      })
+    for (let index = 0; index < session.log.length; index++) {
+      const turn = session.log[index]
+      const current = index === session.log.length - 1
+      const elapsed = Date.now() - turn.at
+      messages.push({ type: "user", text: turn.prompt, tools: [], at: turn.at })
+      if (current) {
+        messages.push({
+          type: "assistant",
+          text: session.outcome === "succeeded" ? "Done — it's ready." : "",
+          tools: this.toolsAt(elapsed),
+          reasoning: this.reasoningAt(elapsed),
+          at: turn.at + elapsed,
+        })
+      } else {
+        messages.push({
+          type: "assistant",
+          text: "Done — it's ready.",
+          tools: ["write", "open_with_default_app"],
+          at: turn.at + 1000,
+        })
+      }
     }
     return messages
   }
@@ -180,6 +196,14 @@ export class MockBackend implements Backend {
     if (elapsed < 2800) return ["write", "edit"]
     if (elapsed < 4000) return ["write", "edit", "shell"]
     return ["write", "edit", "shell", "open_with_default_app"]
+  }
+
+  private reasoningAt(elapsed: number): string {
+    if (elapsed < 900) return "Reading the request and planning a simple single-page layout."
+    if (elapsed < 1800) return "Writing the page structure and the timer markup."
+    if (elapsed < 2800) return "Styling the timer, buttons and the daily counter so it feels calm."
+    if (elapsed < 4000) return "Checking the countdown logic and the reset behaviour."
+    return "Polishing the last details and preparing the launcher."
   }
 
   private writeArtifact(session: MockSession) {

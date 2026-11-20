@@ -23,8 +23,8 @@ test("an API-key request becomes a simple guided dialog", async () => {
     const page = await app.firstWindow()
     await page.getByLabel("Your key").fill("test-key-1234567890")
     await page.getByRole("button", { name: "Start making things" }).click()
-    await page.getByPlaceholder(/A timer/).fill("I need an api key for a weather service")
-    await page.getByRole("button", { name: "Make it →" }).click()
+    await page.getByPlaceholder(/Ask me anything/).fill("I need an api key for a weather service")
+    await page.getByRole("button", { name: "Send" }).click()
 
     await expect(page.getByText("A key for demo-service")).toBeVisible({ timeout: 40_000 })
     await expect(page.getByRole("button", { name: "Open the page" })).toBeVisible()

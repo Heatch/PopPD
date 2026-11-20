@@ -12,6 +12,7 @@ export function defaultSettings(documentsDir: string): Settings {
     workspaceRoot: path.join(documentsDir, "PopPD"),
     autoOpen: true,
     notifications: true,
+    theme: "system",
     allowMcp: false,
     mcpServers: {},
   }

@@ -204,6 +204,23 @@ export function SettingsScreen({
       <p className="sub">For whoever set PopPD up. Nothing here is needed for everyday use.</p>
 
       <section className="setting card">
+        <h2>Appearance</h2>
+        <p className="desc">Follows your computer by default.</p>
+        <div className="row">
+          {(["system", "light", "dark"] as const).map((theme) => (
+            <button
+              key={theme}
+              className="chip"
+              aria-pressed={settings.theme === theme}
+              onClick={() => void save({ theme })}
+            >
+              {theme === "system" ? "Match computer" : theme === "light" ? "Light" : "Dark"}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="setting card">
         <h2>Model</h2>
         <p className="desc">Only the models included with your PopPD account are listed.</p>
         <div className="model-list">
@@ -346,7 +363,10 @@ export function SettingsScreen({
 
       <section className="setting card">
         <h2>Folder & storage</h2>
-        <p className="desc">Finished things are saved here.</p>
+        <p className="desc">
+          Finished things are saved here, on this computer. Cloud folders like OneDrive are
+          avoided because they can make builds stall.
+        </p>
         <div className="row">
           <code className="muted" style={{ fontSize: 13 }}>
             {settings.workspaceRoot}

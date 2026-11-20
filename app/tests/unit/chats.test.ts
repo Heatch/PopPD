@@ -65,6 +65,7 @@ function tempDir(): string {
 
 class CompletingBackend implements Backend {
   removed: string[] = []
+  prompted = false
   private calls = 0
   constructor(
     private readonly text = "Done — your result is ready.",
@@ -93,7 +94,9 @@ class CompletingBackend implements Backend {
   async createSession(): Promise<string> {
     return "session-ok"
   }
-  async prompt() {}
+  async prompt() {
+    this.prompted = true
+  }
   async session(): Promise<BackendSessionState> {
     this.calls++
     return {
@@ -111,6 +114,7 @@ class CompletingBackend implements Backend {
   }
   async replyPermission() {}
   async messages(): Promise<BackendMessage[]> {
+    if (!this.prompted) return []
     return [{ type: "assistant", text: this.text, tools: ["write"], at: Date.now() }]
   }
   async interrupt() {}
@@ -264,6 +268,29 @@ describe("chat manager", () => {
     chats.stopAll()
   })
 
+  it("pins and unpins a chat across a restart", () => {
+    const backend = new CompletingBackend()
+    const base = tempDir()
+    const indexPath = path.join(base, "chats.json")
+    const make = () =>
+      new ChatManager({
+        backend,
+        settings: new SettingsStore(base, tempDir()),
+        indexPath,
+        emit: () => {},
+      })
+    const chats = make()
+    const chat = chats.create("keep me close")
+    chats.setPinned(chat.id, true)
+    expect(chats.find(chat.id)?.pinned).toBe(true)
+
+    const reopened = make()
+    expect(reopened.find(chat.id)?.pinned).toBe(true)
+    reopened.setPinned(chat.id, false)
+    expect(reopened.find(chat.id)?.pinned).toBeUndefined()
+    reopened.stopAll()
+  })
+
   it("removes the engine session when a chat is deleted", async () => {
     const backend = new CompletingBackend()
     const base = tempDir()
@@ -282,8 +309,70 @@ describe("chat manager", () => {
     chats.stopAll()
   })
 
+  it("honours Stop pressed before the engine is ready", async () => {
+    const backend = new CompletingBackend("Done — your result is ready.", 50)
+    const base = tempDir()
+    const events: PopdEvent[] = []
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, tempDir()),
+      indexPath: path.join(base, "chats.json"),
+      emit: (event) => events.push(event),
+    })
+
+    const chat = chats.create("quick stop")
+    const sending = chats.send(chat.id, "make something")
+    await chats.cancel(chat.id)
+    await sending
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    expect(events.some((event) => event.type === "chat-stopped")).toBe(true)
+    expect(events.some((event) => event.type === "chat-done")).toBe(false)
+    expect(events.some((event) => event.type === "busy-changed" && event.busy)).toBe(false)
+    chats.stopAll()
+  })
+
+  it("stops a run when the person asks", async () => {
+    const backend = new CompletingBackend("Done — your result is ready.", 50)
+    const base = tempDir()
+    const docs = tempDir()
+    const events: PopdEvent[] = []
+    const chats = new ChatManager({
+      backend,
+      settings: new SettingsStore(base, docs),
+      indexPath: path.join(base, "chats.json"),
+      emit: (event) => events.push(event),
+    })
+
+    const chat = chats.create("stoppable")
+    await chats.send(chat.id, "make something")
+    await chats.cancel(chat.id)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    expect(events.some((event) => event.type === "chat-stopped")).toBe(true)
+    expect(events.some((event) => event.type === "busy-changed" && !event.busy)).toBe(true)
+    expect(events.some((event) => event.type === "chat-done")).toBe(false)
+    chats.stopAll()
+  })
+
+  it("takes an archived chat back with its original identity", async () => {
+    const chats = new ChatManager({
+      backend: new CompletingBackend(),
+      settings: new SettingsStore(tempDir(), tempDir()),
+      indexPath: path.join(tempDir(), "chats.json"),
+      emit: () => {},
+    })
+    const chat = chats.create("archivable")
+    await chats.remove(chat.id)
+    expect(chats.find(chat.id)).toBeUndefined()
+    chats.adopt(chat)
+    expect(chats.find(chat.id)?.title).toBe("archivable")
+    chats.stopAll()
+  })
+
   it("re-attaches to a run that was still going after a restart", async () => {
     const backend = new CompletingBackend("Done — your result is ready.", 2)
+    backend.prompted = true
     const base = tempDir()
     const docs = tempDir()
     const indexPath = path.join(base, "chats.json")

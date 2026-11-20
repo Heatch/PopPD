@@ -30,6 +30,8 @@ export interface ChatSummary {
   sessionID?: string
   /** Which persona built it (defaults to pop). */
   agent?: string
+  /** Kept at the top of the sidebar. */
+  pinned?: boolean
 }
 
 export interface ChatMessage {
@@ -76,6 +78,7 @@ export interface Settings {
   workspaceRoot: string
   autoOpen: boolean
   notifications: boolean
+  theme: "system" | "light" | "dark"
   allowMcp: boolean
   mcpServers: Record<string, McpServerSetting>
 }
@@ -125,7 +128,7 @@ export interface UpdateState {
 
 export type PopdEvent =
   | { type: "engine-status"; status: EngineStatus; detail?: string }
-  | { type: "chat-progress"; chatId: string; line: string; elapsedMs: number }
+  | { type: "chat-progress"; chatId: string; line: string; elapsedMs: number; detail?: string; reasoning?: string }
   | { type: "chat-warning"; chatId: string; message: string }
   | { type: "chat-question"; chatId: string; question: Question }
   | {
@@ -139,9 +142,11 @@ export type PopdEvent =
       sanitized?: boolean
     }
   | { type: "chat-error"; chatId: string; message: string; retryable: boolean }
+  | { type: "chat-stopped"; chatId: string }
   | { type: "chats-changed" }
   | { type: "library-changed" }
   | { type: "busy-changed"; busy: boolean }
+  | { type: "theme-changed"; appearance: "light" | "dark" }
   | { type: "open-chat"; chatId: string }
   | { type: "update-state"; state: UpdateState }
 
@@ -151,6 +156,7 @@ export interface PopdApi {
     engine: EngineStatus
     chats: ChatSummary[]
     versions: { app: string; rules?: boolean; engine?: string }
+    appearance: "light" | "dark"
   }>
   saveSettings(patch: Partial<Settings>): Promise<Settings>
   connectKey(key: string): Promise<{ ok: boolean; error?: string }>
@@ -160,10 +166,18 @@ export interface PopdApi {
   listModels(): Promise<ModelOption[]>
   createChat(title?: string, agent?: string): Promise<ChatSummary>
   renameChat(id: string, title: string): Promise<void>
+  pinChat(id: string, pinned: boolean): Promise<void>
   deleteChat(id: string): Promise<void>
   listChats(): Promise<ChatSummary[]>
-  getChat(id: string): Promise<{ chat: ChatSummary; messages: ChatMessage[] }>
+  getChat(id: string): Promise<{
+    chat: ChatSummary
+    messages: ChatMessage[]
+    artifacts: Artifact[]
+    escalation?: { reason?: string; explanation?: string }
+    apiKeyRequest?: ApiKeyRequest
+  }>
   send(chatId: string, text: string): Promise<void>
+  cancelChat(chatId: string): Promise<void>
   answerQuestion(
     chatId: string,
     formId: string,
@@ -179,6 +193,7 @@ export interface PopdApi {
   usage(): Promise<UsageEntry[]>
   workspaceStats(): Promise<{ root: string; total: number; chats: WorkspaceStat[] }>
   archiveChat(id: string): Promise<{ ok: boolean; path?: string; error?: string }>
+  restoreChat(id: string): Promise<{ ok: boolean; error?: string }>
   logs(): Promise<{ engine: string; plugin: string }>
   updates(): Promise<UpdateState>
   checkUpdates(): Promise<UpdateState>

@@ -13,7 +13,7 @@ import {
 } from "./delivery/launcher"
 import { openPath } from "./delivery/shell"
 import { ensureWorkspace } from "./delivery/workspace"
-import { elapsedText, toolsLine } from "./engine/progress"
+import { elapsedText, summarizeReasoning, toolsLine } from "./engine/progress"
 import { preflight } from "./guardrails/preflight"
 import { sanitize } from "./guardrails/lint"
 import { estimateCostUsd } from "./model"
@@ -30,6 +30,10 @@ interface Run {
   lastActivity: number
   asking: boolean
   lastLine: string
+  lastDetail: string
+  lastFingerprint: string
+  baselineUpdated: number
+  baselineAssistants: number
   timer?: NodeJS.Timeout
   ticking: boolean
 }
@@ -37,6 +41,7 @@ interface Run {
 export class ChatManager {
   private chats: ChatSummary[] = []
   private runs = new Map<string, Run>()
+  private cancelled = new Set<string>()
   private lastBusy = false
 
   constructor(
@@ -102,6 +107,14 @@ export class ChatManager {
     this.deps.emit({ type: "library-changed" })
   }
 
+  setPinned(id: string, pinned: boolean) {
+    const chat = this.find(id)
+    if (!chat) return
+    chat.pinned = pinned || undefined
+    this.save()
+    this.deps.emit({ type: "chats-changed" })
+  }
+
   async remove(id: string) {
     const chat = this.find(id)
     const run = this.runs.get(id)
@@ -164,6 +177,10 @@ export class ChatManager {
         lastActivity: now,
         asking: false,
         lastLine: "",
+        lastDetail: "",
+        lastFingerprint: "",
+        baselineUpdated: 0,
+        baselineAssistants: 0,
         ticking: false,
       }
       this.runs.set(chat.id, run)
@@ -178,6 +195,7 @@ export class ChatManager {
     const chat = this.find(chatId)
     if (!chat) throw new Error("Unknown chat")
     if (this.runs.has(chatId)) return
+    this.cancelled.delete(chatId)
 
     const prompt = text.trim()
     if (!prompt) return
@@ -189,6 +207,7 @@ export class ChatManager {
       this.deps.emit({ type: "chat-warning", chatId, message: warning })
     }
 
+    const freshSession = !chat.sessionID
     if (!chat.sessionID) {
       const title = chat.title === "New idea" ? prompt.slice(0, 48) : chat.title
       chat.sessionID = await this.deps.backend.createSession({
@@ -202,7 +221,17 @@ export class ChatManager {
       this.deps.emit({ type: "chats-changed" })
     }
 
+    // A previous turn leaves its outcome on the session until this one starts.
+    const before = freshSession ? null : await this.deps.backend.session(chat.sessionID).catch(() => null)
+    const prior = freshSession ? [] : await this.deps.backend.messages(chat.sessionID).catch(() => [])
     await this.deps.backend.prompt(chat.sessionID, prompt)
+    // The person may have pressed Stop before the engine was ready.
+    if (this.cancelled.has(chatId)) {
+      this.cancelled.delete(chatId)
+      await this.deps.backend.interrupt(chat.sessionID).catch(() => {})
+      this.deps.emit({ type: "chat-stopped", chatId })
+      return
+    }
     const now = Date.now()
     const run: Run = {
       sessionID: chat.sessionID,
@@ -211,13 +240,16 @@ export class ChatManager {
       lastActivity: now,
       asking: false,
       lastLine: "",
+      lastDetail: "",
+      lastFingerprint: "",
+      baselineUpdated: before?.updated ?? 0,
+      baselineAssistants: prior.filter((message) => message.type === "assistant").length,
       ticking: false,
     }
     this.runs.set(chatId, run)
     this.emitBusy()
     this.deps.emit({ type: "chat-progress", chatId, line: "Getting started…", elapsedMs: 0 })
     run.timer = setInterval(() => void this.tick(chatId), pollMs())
-    void this.tick(chatId)
   }
 
   async answer(chatId: string, formId: string, answer: Record<string, string | number | boolean | string[]>) {
@@ -227,6 +259,30 @@ export class ChatManager {
     run.asking = false
     run.lastActivity = Date.now()
     this.deps.emit({ type: "chat-progress", chatId, line: "Thanks — carrying on…", elapsedMs: Date.now() - run.startedAt })
+  }
+
+  /** Stops a run at the person's request (not an error). */
+  async cancel(chatId: string) {
+    const run = this.runs.get(chatId)
+    if (!run) {
+      // No run yet: the send is still waiting for the engine. Stop it there.
+      this.cancelled.add(chatId)
+      this.deps.emit({ type: "chat-stopped", chatId })
+      return
+    }
+    this.clear(chatId, run)
+    await this.deps.backend.interrupt(run.sessionID).catch(() => {})
+    this.deps.emit({ type: "chat-stopped", chatId })
+    this.deps.emit({ type: "chats-changed" })
+  }
+
+  /** Puts an archived chat back, with its original folder and timestamps. */
+  adopt(chat: ChatSummary) {
+    if (this.find(chat.id)) return
+    this.chats.push(chat)
+    this.save()
+    this.deps.emit({ type: "chats-changed" })
+    this.deps.emit({ type: "library-changed" })
   }
 
   stopAll() {
@@ -273,26 +329,62 @@ export class ChatManager {
       const messages = await this.deps.backend.messages(run.sessionID).catch(() => [])
       const lastAssistant = [...messages].reverse().find((message) => message.type === "assistant")
       const line = toolsLine(lastAssistant?.tools ?? [])
-      if (line !== run.lastLine) {
+      const reasoning = (lastAssistant?.reasoning ?? "").trim().slice(-12_000)
+      const detail = summarizeReasoning(reasoning)
+
+      // Streaming text or thinking counts as life, even if the session clock is quiet.
+      const fingerprint = [
+        messages.length,
+        lastAssistant?.text.length ?? 0,
+        reasoning.length,
+        lastAssistant?.tools.length ?? 0,
+      ].join(":")
+      if (fingerprint !== run.lastFingerprint) {
+        run.lastFingerprint = fingerprint
+        run.lastActivity = Date.now()
+      }
+
+      if (line !== run.lastLine || detail !== run.lastDetail) {
         run.lastLine = line
-        this.deps.emit({ type: "chat-progress", chatId, line, elapsedMs: Date.now() - run.startedAt })
+        run.lastDetail = detail
+        this.deps.emit({
+          type: "chat-progress",
+          chatId,
+          line,
+          detail: detail || undefined,
+          reasoning: reasoning || undefined,
+          elapsedMs: Date.now() - run.startedAt,
+        })
       }
 
       const state = await this.deps.backend.session(run.sessionID)
       if (state.updated > run.lastActivity) run.lastActivity = state.updated
 
-      if (state.outcome) {
-        await this.finish(chatId, run, state.outcome, state.error)
+      // A finished outcome from the previous turn can still be on the session. Only
+      // trust it once this turn has written its own answer.
+      const assistants = messages.filter((message) => message.type === "assistant")
+      const newest = assistants[assistants.length - 1]
+      const newAnswer = assistants.length > run.baselineAssistants && Boolean(newest?.text.trim())
+      const finished =
+        state.outcome === "succeeded"
+          ? newAnswer
+          : Boolean(state.outcome) && state.updated > run.baselineUpdated
+      if (finished) {
+        await this.finish(chatId, run, state.outcome!, state.error)
         return
       }
 
       if (!run.asking && Date.now() - run.lastActivity > stallMs()) {
+        this.guardrailLog(
+          `chat=${chatId} stalled elapsed=${Date.now() - run.startedAt}ms silent=${Date.now() - run.lastActivity}ms line=${JSON.stringify(run.lastLine)} detail=${JSON.stringify(run.lastDetail.slice(0, 160))}`,
+        )
         await this.deps.backend.interrupt(run.sessionID).catch(() => {})
         this.clear(chatId, run)
         this.deps.emit({
           type: "chat-error",
           chatId,
-          message: "It got stuck part-way through. Nothing is lost — try again or ask for a change.",
+          message:
+            "PopPD stopped this one after a few minutes without a response. Nothing is lost — try again, or tell me a change to make.",
           retryable: true,
         })
         this.deps.emit({ type: "chats-changed" })
@@ -329,6 +421,9 @@ export class ChatManager {
     this.clear(chatId, run)
     if (!chat) return
     if (outcome !== "succeeded") {
+      this.guardrailLog(
+        `chat=${chat.id} outcome=${outcome} error=${JSON.stringify((error ?? "").slice(0, 300))}`,
+      )
       this.deps.emit({
         type: "chat-error",
         chatId,
@@ -349,7 +444,9 @@ export class ChatManager {
     const messages = await this.deps.backend.messages(run.sessionID).catch(() => [])
     const raw =
       [...messages].reverse().find((entry) => entry.type === "assistant" && entry.text.trim())?.text.trim() ||
-      "Done — your result is ready."
+      (artifacts.length > 0
+        ? "Done — your result is ready."
+        : "I'm here — tell me more whenever you're ready.")
     const cleaned = sanitize(raw)
     if (cleaned.changed) {
       this.guardrailLog(

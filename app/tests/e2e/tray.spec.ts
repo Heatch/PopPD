@@ -39,11 +39,31 @@ test("closing the window mid-task keeps the task running", async () => {
 
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole("heading", { name: "What should we make today?" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What's on your mind?" })).toBeVisible()
 
-    await page.getByPlaceholder(/A timer/).fill("Make me a pomodoro timer")
-    await page.getByRole("button", { name: "Make it →" }).click()
-    await expect(page.getByText("Getting started…")).toBeVisible({ timeout: 10_000 })
+    await page.getByPlaceholder(/Ask me anything/).fill("Make me a pomodoro timer")
+    await page.getByRole("button", { name: "Send" }).click()
+    await expect(page.locator(".composer-line", { hasText: "Getting started…" })).toBeVisible({ timeout: 10_000 })
+
+    // The busy state is centered and its clock advances (no stuck 0s).
+    const status = page.locator(".composer-status")
+    await expect(status).toBeVisible()
+    await expect(status).toContainText("PopPD is working…")
+    expect(await status.evaluate((element) => getComputedStyle(element).justifyContent)).toBe("center")
+    await expect
+      .poll(async () => page.locator(".composer-status .elapsed").innerText(), { timeout: 10_000 })
+      .not.toBe("0s")
+
+    // Thinking expands on click, like a normal chat app.
+    await expect(page.locator(".thinking-peek")).toBeVisible()
+    await page.locator(".thinking-head").click()
+    await expect
+      .poll(
+        async () =>
+          page.locator(".thinking-body").evaluateAll((nodes) => nodes.map((node) => node.textContent ?? "").join("")),
+        { timeout: 20_000 },
+      )
+      .toMatch(/[A-Za-z]/)
 
     // Close the window while it works: it should hide, not quit.
     await expect

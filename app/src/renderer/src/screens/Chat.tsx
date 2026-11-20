@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { ApiKeyRequest, Artifact, ChatMessage, EngineStatus, Question } from "../../../shared/types"
+import type { ApiKeyRequest, Artifact, ChatMessage, Question } from "../../../shared/types"
 
 const GLYPH: Record<string, string> = {
   web: "🌐",
@@ -30,22 +30,31 @@ function clock(ms: number): string {
 export function Chat({
   chatId,
   initialPrompt,
-  engine,
+  initialRun,
+  initialQuestion,
+  onQuestionAnswered,
   onBack,
-  onRestartEngine,
 }: {
   chatId: string
   initialPrompt?: string
-  engine: EngineStatus
+  initialRun?: { line: string; startedAt: number; detail?: string; reasoning?: string }
+  initialQuestion?: Question
+  onQuestionAnswered?: (chatId: string) => void
   onBack: () => void
-  onRestartEngine: () => void
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [title, setTitle] = useState("")
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState("")
-  const [progress, setProgress] = useState<{ line: string; elapsedMs: number } | null>(null)
-  const [question, setQuestion] = useState<Question | null>(null)
+  const [progress, setProgress] = useState<{
+    line: string
+    startedAt: number
+    detail?: string
+    reasoning?: string
+  } | null>(initialRun ?? null)
+  const [thinkingOpen, setThinkingOpen] = useState(false)
+  const [now, setNow] = useState(Date.now())
+  const [question, setQuestion] = useState<Question | null>(initialQuestion ?? null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
   const [escalation, setEscalation] = useState<{ reason?: string; explanation?: string } | null>(null)
@@ -54,21 +63,41 @@ export function Chat({
   const [keyValue, setKeyValue] = useState("")
   const [keyStatus, setKeyStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [stopped, setStopped] = useState(false)
+  const [busy, setBusy] = useState(Boolean(initialRun))
+  const [loaded, setLoaded] = useState(false)
   const [input, setInput] = useState("")
   const [lastPrompt, setLastPrompt] = useState("")
   const endRef = useRef<HTMLDivElement>(null)
+  const thinkingRef = useRef<HTMLDivElement>(null)
   const sentInitial = useRef(false)
 
   useEffect(() => {
-    void window.popd.getChat(chatId).then(({ chat, messages: stored }) => {
-      setTitle(chat.title)
-      setMessages(stored)
-    })
-    return window.popd.onEvent((event) => {
+    let active = true
+    void window.popd
+      .getChat(chatId)
+      .then(({ chat, messages: stored, artifacts: files, escalation: handoff, apiKeyRequest: keyRequest }) => {
+        if (!active) return
+        setTitle(chat.title)
+        // Never erase something the person already typed or a finished result.
+        setMessages((current) => (current.length === 0 ? stored : current))
+        setArtifacts((current) => (current.length === 0 ? files : current))
+        setEscalation((current) => current ?? handoff ?? null)
+        setApiKeyRequest((current) => current ?? keyRequest ?? null)
+        setLoaded(true)
+      })
+      .catch(() => {
+        if (active) setLoaded(true)
+      })
+    const off = window.popd.onEvent((event) => {
       if (!("chatId" in event) || event.chatId !== chatId) return
       if (event.type === "chat-progress") {
-        setProgress({ line: event.line, elapsedMs: event.elapsedMs })
+        setProgress({
+          line: event.line,
+          detail: event.detail,
+          reasoning: event.reasoning,
+          startedAt: Date.now() - event.elapsedMs,
+        })
       } else if (event.type === "chat-warning") {
         setWarnings((current) => (current.includes(event.message) ? current : [...current, event.message]))
       } else if (event.type === "chat-question") {
@@ -88,9 +117,25 @@ export function Chat({
         setBusy(false)
         setProgress(null)
         setError(event.message)
+      } else if (event.type === "chat-stopped") {
+        setBusy(false)
+        setProgress(null)
+        setStopped(true)
       }
     })
+    return () => {
+      active = false
+      off()
+    }
   }, [chatId])
+
+  // Keep the elapsed time moving between engine updates.
+  useEffect(() => {
+    if (!progress) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [progress])
 
   const send = useCallback(
     async (text: string) => {
@@ -98,15 +143,15 @@ export function Chat({
       if (!trimmed || busy) return
       setBusy(true)
       setError(null)
+      setStopped(false)
       setQuestion(null)
-      setArtifacts([])
       setEscalation(null)
       setApiKeyRequest(null)
       setWarnings([])
       setKeyValue("")
       setKeyStatus(null)
       setLastPrompt(trimmed)
-      setProgress({ line: "Getting started…", elapsedMs: 0 })
+      setProgress({ line: "Getting started…", startedAt: Date.now() })
       setMessages((current) => [...current, { role: "user", text: trimmed, at: Date.now() }])
       setInput("")
       try {
@@ -121,15 +166,24 @@ export function Chat({
   )
 
   useEffect(() => {
+    if (!loaded) return
     if (initialPrompt && !sentInitial.current) {
       sentInitial.current = true
       void send(initialPrompt)
     }
-  }, [initialPrompt, send])
+  }, [initialPrompt, loaded, send])
 
   useEffect(() => {
+    // While an expanded thinking panel is open, leave the page where it is.
+    if (thinkingOpen && progress) return
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-  }, [messages, progress, question, artifacts, error])
+  }, [messages, progress, question, artifacts, error, thinkingOpen])
+
+  // Keep the newest line of thinking in view.
+  useEffect(() => {
+    if (!thinkingOpen || !thinkingRef.current) return
+    thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight
+  }, [thinkingOpen, progress?.reasoning])
 
   const answer = async () => {
     if (!question) return
@@ -139,6 +193,7 @@ export function Chat({
       payload[field.key] = field.type === "number" || field.type === "integer" ? Number(value || 0) : value
     }
     setQuestion(null)
+    onQuestionAnswered?.(chatId)
     await window.popd.answerQuestion(chatId, question.formId, payload)
   }
 
@@ -153,70 +208,59 @@ export function Chat({
     if (result.ok) setKeyValue("")
   }
 
+  const rename = async () => {
+    const next = titleDraft.trim()
+    if (!next) {
+      setEditingTitle(false)
+      return
+    }
+    await window.popd.renameChat(chatId, next)
+    setTitle(next)
+    setEditingTitle(false)
+  }
+
+  const elapsed = progress ? Math.max(0, now - progress.startedAt) : 0
+
   return (
     <div className="chat-shell">
       <header className="chat-header">
-        <button className="btn ghost small" onClick={onBack}>
-          ← Back
-        </button>
-        <div className="chat-title">{title || "Your chat"}</div>
-        <button
-          className="btn link small"
-          aria-label="Rename chat"
-          onClick={() => {
-            setTitleDraft(title)
-            setEditingTitle(true)
-          }}
-        >
-          ✎
-        </button>
-        {editingTitle && (
-          <div className="row" style={{ marginLeft: 8 }}>
+        {editingTitle ? (
+          <>
             <input
               className="input"
-              style={{ width: 220 }}
+              style={{ width: 260 }}
               value={titleDraft}
               autoFocus
               onChange={(event) => setTitleDraft(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void window.popd.renameChat(chatId, titleDraft).then(() => {
-                    setTitle(titleDraft.trim() || title)
-                    setEditingTitle(false)
-                  })
-                }
+                if (event.key === "Enter") void rename()
                 if (event.key === "Escape") setEditingTitle(false)
               }}
             />
-            <button
-              className="btn small"
-              onClick={() =>
-                void window.popd.renameChat(chatId, titleDraft).then(() => {
-                  setTitle(titleDraft.trim() || title)
-                  setEditingTitle(false)
-                })
-              }
-            >
+            <button className="btn small" onClick={() => void rename()}>
               Save
             </button>
-          </div>
-        )}
-        <span className="spacer" />
-        {engine !== "ready" && (
-          <span className={`engine-pill ${engine}`}>
-            <span className="led" />
-            {engine === "error" ? "Builder stopped" : "Warming up…"}
-            {engine === "error" && (
-              <button className="btn link small" onClick={onRestartEngine}>
-                Restart
-              </button>
-            )}
-          </span>
+          </>
+        ) : (
+          <>
+            <div className="chat-title">{title || "Your chat"}</div>
+            <button
+              className="btn link small"
+              aria-label="Rename chat"
+              title="Rename chat"
+              onClick={() => {
+                setTitleDraft(title)
+                setEditingTitle(true)
+              }}
+            >
+              Rename
+            </button>
+          </>
         )}
       </header>
 
       <div className="chat-scroll">
-        <div className="container">
+        <div className="chat-content">
           <div className="messages">
             {messages.length === 0 && !progress && (
               <p className="muted">Tell PopPD what you'd like, in your own words.</p>
@@ -228,28 +272,54 @@ export function Chat({
                   {message.text}
                 </div>
               ) : (
-                <div key={index} className="msg-assistant">
-                  {message.text}
+                <div key={index} className="msg-assistant-block">
+                  <div className="msg-author">
+                    <span className="author-dot" />
+                    PopPD
+                  </div>
+                  <div className="msg-assistant">{message.text}</div>
                 </div>
               ),
             )}
 
             {warnings.map((warning) => (
-              <div key={warning} className="card" style={{ borderColor: "#e3b9a8", background: "#fff6f1" }}>
+              <div key={warning} className="card warn-card">
                 <p>{warning}</p>
               </div>
             ))}
 
             {progress && (
-              <div className="progress">
-                <span className="dots">
-                  <span />
-                  <span />
-                  <span />
-                </span>
-                {progress.line} <span className="muted">· {clock(progress.elapsedMs)}</span>
+              <div className={`thinking ${thinkingOpen ? "open" : ""}`}>
+                <button
+                  className="thinking-head"
+                  aria-expanded={thinkingOpen}
+                  onClick={() => setThinkingOpen((open) => !open)}
+                >
+                  <span className="dots">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                  <span className="thinking-line">{progress.line}</span>
+                  <span className="thinking-time">· {clock(elapsed)}</span>
+                  <span className="chevron" aria-hidden>
+                    ⌄
+                  </span>
+                </button>
+                {!thinkingOpen && progress.detail && <p className="thinking-peek">{progress.detail}</p>}
+                {thinkingOpen && (
+                  <div className="thinking-body" ref={thinkingRef}>
+                    {progress.reasoning ? (
+                      <p>{progress.reasoning}</p>
+                    ) : (
+                      <p className="muted">PopPD hasn't written anything down yet. It's still working.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
+
+            {stopped && <p className="muted">Stopped. Ask again whenever you're ready.</p>}
 
             {question && (
               <div className="card question-card">
@@ -323,7 +393,7 @@ export function Chat({
             )}
 
             {escalation && (
-              <div className="card" style={{ borderColor: "#e3b9a8", background: "#fff6f1" }}>
+              <div className="card warn-card">
                 <h3>This one needs a real developer</h3>
                 <p>{escalation.explanation ?? "A person should take this one a step further."}</p>
                 {escalation.reason && <p className="status-line">Reason: {escalation.reason}</p>}
@@ -390,13 +460,44 @@ export function Chat({
       </div>
 
       <div className="composer">
-        <div className="container" style={{ paddingBottom: 0 }}>
+        {busy || question ? (
+          <div className="composer-status">
+            <div className="composer-status-row">
+              <span className="dots">
+                <span />
+                <span />
+                <span />
+              </span>
+              {question ? "Waiting for your answer above" : "PopPD is working…"}
+              {busy && progress && <span className="elapsed">{clock(elapsed)}</span>}
+              {busy && (
+                <button className="btn link small stop" onClick={() => void window.popd.cancelChat(chatId)}>
+                  Stop
+                </button>
+              )}
+            </div>
+            {busy && progress && (
+              <div className="composer-detail">
+                <button
+                  className="composer-line"
+                  aria-expanded={thinkingOpen}
+                  title={thinkingOpen ? "Hide thinking" : "Show thinking"}
+                  onClick={() => setThinkingOpen((open) => !open)}
+                >
+                  {progress.line}
+                  <span className={`chevron ${thinkingOpen ? "open" : ""}`} aria-hidden>
+                    ⌄
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
           <div className="composer-inner">
             <textarea
               rows={1}
               value={input}
-              placeholder={busy ? "PopPD is working…" : "Ask for a change…"}
-              disabled={busy || Boolean(question)}
+              placeholder="Ask for a change…"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -405,11 +506,11 @@ export function Chat({
                 }
               }}
             />
-            <button className="btn" disabled={busy || !input.trim() || Boolean(question)} onClick={() => void send(input)}>
+            <button className="btn" disabled={!input.trim()} onClick={() => void send(input)}>
               Send
             </button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

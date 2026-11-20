@@ -58,7 +58,12 @@ export function lint(text: string): LintResult {
  */
 export function sanitize(text: string): { text: string; changed: boolean; removed: number } {
   const original = text ?? ""
-  let working = original.replace(/```[\s\S]*?```/g, "").replace(/`([^`]+)`/g, "$1")
+  let working = original
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    // PopPD shows plain text, so markdown emphasis would arrive as stray asterisks.
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=$|[\s).,!?])/g, "$1$2")
 
   const lines = working.split(/\r?\n/)
   const kept: string[] = []

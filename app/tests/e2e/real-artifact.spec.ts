@@ -58,16 +58,16 @@ test("real engine: a plain request becomes an openable artifact", async () => {
 
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole("heading", { name: "What should we make today?" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "What's on your mind?" })).toBeVisible({
       timeout: 30_000,
     })
 
     await page
-      .getByPlaceholder(/A timer/)
+      .getByPlaceholder(/Ask me anything/)
       .fill(
         "Make a single web page that says Hello from PopPD with a little style. Create Open this.bat, then use deliver_artifact for the page.",
       )
-    await page.getByRole("button", { name: "Make it →" }).click()
+    await page.getByRole("button", { name: "Send" }).click()
 
     await expect(page.getByText("Your result")).toBeVisible({ timeout: 360_000 })
 
@@ -82,8 +82,8 @@ test("real engine: a plain request becomes an openable artifact", async () => {
     expect(result.ok).toBe(true)
 
     // The same artifact shows up in Your stuff.
-    await page.getByRole("button", { name: "← Back" }).click()
-    await page.getByRole("button", { name: "Your stuff" }).click()
+    await page.getByRole("button", { name: "Home", exact: true }).click()
+    await page.getByRole("button", { name: "Your stuff", exact: true }).click()
     await expect(page.getByText(/\.html?$/).first()).toBeVisible({ timeout: 60_000 })
     await page.screenshot({ path: path.join(tmp, "acceptance.png") })
   } finally {

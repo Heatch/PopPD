@@ -43,11 +43,11 @@ test("packaged app uses its bundled engine and answers as PopPD", async () => {
 
   try {
     const page = await app.firstWindow()
-    await expect(page.getByRole("heading", { name: "What should we make today?" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "What's on your mind?" })).toBeVisible({
       timeout: 30_000,
     })
-    await page.getByPlaceholder(/A timer/).fill("Who are you? Answer in one short sentence.")
-    await page.getByRole("button", { name: "Make it →" }).click()
+    await page.getByPlaceholder(/Ask me anything/).fill("Who are you? Answer in one short sentence.")
+    await page.getByRole("button", { name: "Send" }).click()
     await expect(page.locator(".msg-assistant").filter({ hasText: /pop+d|friendly builder/i }).first()).toBeVisible({
       timeout: 180_000,
     })

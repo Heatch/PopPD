@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { OpenCodeBackend } from "../../src/main/backend/opencode"
+import { waitForId } from "../../src/main/backend/wait"
 import { buildEngineConfig } from "../../src/main/engine/config"
 import { EngineSupervisor } from "../../src/main/engine/supervisor"
 
@@ -41,6 +42,18 @@ describe.skipIf(!realEngine)("real engine", () => {
       try {
         await supervisor.start()
         expect(supervisor.status).toBe("ready")
+
+        // The onboarding bug: the integration catalog is briefly empty on a fresh
+        // engine. The wait must find opencode-go instead of failing the key write.
+        const catalogued = await waitForId(
+          async () => {
+            const list: any = await supervisor.clientOrThrow().integration.list()
+            return (list?.data ?? []).map((entry: any) => String(entry.id))
+          },
+          "opencode-go",
+          { timeoutMs: 15_000, intervalMs: 300 },
+        )
+        expect(catalogued).toBe(true)
 
         const backend = new OpenCodeBackend(supervisor)
         const sessionID = await backend.createSession({

@@ -1,6 +1,7 @@
 import type { Backend, BackendForm, BackendMessage, BackendSessionState, ModelInfo } from "./types"
 import type { EngineSupervisor } from "../engine/supervisor"
 import { modelHint, parseModel } from "../model"
+import { waitForId } from "./wait"
 
 export class OpenCodeBackend implements Backend {
   constructor(private supervisor: EngineSupervisor) {}
@@ -30,7 +31,12 @@ export class OpenCodeBackend implements Backend {
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    const result: any = await this.client().model.list()
+    let result: any = await this.client().model.list()
+    // On a fresh engine the model catalog can still be loading.
+    if (!(result?.data ?? []).length) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      result = await this.client().model.list().catch(() => result)
+    }
     const data: any[] = result?.data ?? []
     return data
       .filter((model) => model?.providerID === "opencode-go")
@@ -46,11 +52,20 @@ export class OpenCodeBackend implements Backend {
       })
   }
 
+  private async integrationIds(): Promise<string[]> {
+    const list: any = await this.client().integration.list()
+    return (list?.data ?? []).map((entry: any) => String(entry.id))
+  }
+
   async connectKey(key: string): Promise<void> {
+    const ready = await waitForId(() => this.integrationIds(), "opencode-go")
+    if (!ready) throw new Error("The builder is still getting ready. Wait a moment and try again.")
     await this.client().integration.connect.key({ integrationID: "opencode-go", key })
   }
 
   async connectIntegration(integrationID: string, key: string): Promise<void> {
+    const ready = await waitForId(() => this.integrationIds(), integrationID)
+    if (!ready) throw new Error(`The builder doesn't recognise ${integrationID}.`)
     await this.client().integration.connect.key({ integrationID, key })
   }
 
@@ -150,6 +165,10 @@ export class OpenCodeBackend implements Backend {
           .join("\n")
           .trim(),
         tools: parts.filter((part) => part?.type === "tool" && part.name).map((part) => String(part.name)),
+        reasoning: parts
+          .filter((part) => part?.type === "reasoning" && typeof part.text === "string")
+          .map((part) => part.text)
+          .join("\n"),
         at: Number(message.time?.created ?? 0),
       }
     })

@@ -11,16 +11,32 @@ implemented and covered by unit, integration, Electron e2e, and real-engine test
 ## What it does
 
 1. First run: one masked key field, stored by the engine (`integration.connect.key`).
-2. Home: "What should we make today?" plus recent chats.
-3. Chat: plain-language progress, one clarifying-question card, artifact cards with
-   **Open** / **Show in folder**, a guided API-key dialog, a retry card, and a
-   developer handoff card when needed.
+2. Home: "What's on your mind?" plus suggestion chips, with a left sidebar that
+   groups chats by recency (pinned chats stay on top) and highlights the active one.
+   Each chat has a visible "…" button and a right-click menu to open, pin, rename,
+   archive (moved to `Documents/PopPD Archive`, with Undo) or delete (to the Recycle Bin).
+3. Chat: a real conversation that can run over many turns. Users can just talk, ask
+   questions or refine an idea; PopPD only builds when the request clearly asks for
+   something. Replies are labelled (the person on the right, PopPD on the left) and each
+   turn keeps its own answer. While working: a live clock, a click-to-expand thinking
+   panel, a Stop button, one clarifying-question card, artifact cards with **Open** /
+   **Show in folder**, a guided API-key dialog, a retry card, and a developer handoff
+   card when needed.
 4. **Your stuff**: every finished thing across chats, with real thumbnails (web pages
    are screenshot in a hidden window), filters by recency, and one-click open.
-5. Settings: model, key (with a check), MCP manager, usage and estimated spend,
-   storage + archive, notifications, updates, logs, diagnostics.
+5. Settings: model, appearance, key (with a check), MCP manager, usage and estimated
+   spend, storage + archive, notifications, updates, logs, diagnostics.
 
-The agent writes deliverables into `Documents\PopPD\<chat name>\`. The shell guarantees
+## Using it as the developer
+
+Settings are **hidden** from the normal UI. Open them with **Ctrl+Shift+,** or by
+**Shift-clicking the PopPD wordmark**. The theme follows the computer by default
+(Settings → Appearance can force light or dark).
+
+The agent writes deliverables into `%USERPROFILE%\PopPD\<chat name>\` (or
+`Documents\PopPD` when Documents is a plain local folder). Cloud-synced folders such as
+OneDrive are skipped, and an existing synced workspace is moved out once at startup,
+because their file locks and watchers wedged the engine. The shell guarantees
 `Open this.bat`, moves scaffolding into `_work/`, and auto-opens the main artifact.
 
 ## Guardrails

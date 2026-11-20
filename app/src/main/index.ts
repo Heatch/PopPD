@@ -5,6 +5,7 @@ import {
   Notification,
   Tray,
   nativeImage,
+  nativeTheme,
   powerSaveBlocker,
   session,
   dialog,
@@ -19,6 +20,7 @@ import type { Backend } from "./backend/types"
 import { buildEngineConfig } from "./engine/config"
 import { EngineSupervisor } from "./engine/supervisor"
 import { engineBinary, pluginDir, resourcesDir, rulesPath } from "./resources"
+import { ensureLocalWorkspace, workspaceBase } from "./workspaceRoot"
 import { SettingsStore } from "./settings"
 import { registerIpc } from "./ipc"
 import { Library } from "./library"
@@ -205,7 +207,7 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 620,
-    backgroundColor: "#f7f2e8",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#191715" : "#f7f2e8",
     title: "PopPD",
     icon: path.join(resourcesDir(), "icon-256.png"),
     show: false,
@@ -251,9 +253,23 @@ async function bootstrap() {
   Menu.setApplicationMenu(null)
 
   const documents = process.env.POPD_DOCUMENTS ?? app.getPath("documents")
-  const settings = new SettingsStore(app.getPath("userData"), documents)
+  const settings = new SettingsStore(
+    app.getPath("userData"),
+    workspaceBase(documents, app.getPath("home")),
+  )
   if (process.env.POPD_WORKSPACE) settings.save({ workspaceRoot: process.env.POPD_WORKSPACE })
+  else {
+    ensureLocalWorkspace({
+      settings,
+      chatsFile: path.join(app.getPath("userData"), "chats.json"),
+      homeDir: app.getPath("home"),
+    })
+  }
   settingsRef = settings
+  nativeTheme.themeSource = settings.get().theme
+  nativeTheme.on("updated", () => {
+    emit({ type: "theme-changed", appearance: nativeTheme.shouldUseDarkColors ? "dark" : "light" })
+  })
 
   const logDir = path.join(app.getPath("userData"), "logs")
   logDirRef = logDir

@@ -28,6 +28,11 @@ describe("guardrail lint", () => {
     expect(cleaned.text).toContain("Open this.bat")
   })
 
+  it("removes markdown emphasis so no stray asterisks arrive", () => {
+    const cleaned = sanitize("Double-click **Open this.bat** when it's ready.")
+    expect(cleaned.text).toBe("Double-click Open this.bat when it's ready.")
+  })
+
   it("keeps clean text untouched", () => {
     const input = "Your spreadsheet is ready. Open this.bat to see it."
     const cleaned = sanitize(input)

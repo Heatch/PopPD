@@ -1,31 +1,22 @@
-import { useState } from "react"
-import type { ChatSummary } from "../../../shared/types"
+import { useEffect, useState } from "react"
 
-function relative(ts: number): string {
-  const diff = Date.now() - ts
-  const minutes = Math.round(diff / 60_000)
-  if (minutes < 1) return "just now"
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} h ago`
-  const days = Math.round(hours / 24)
-  if (days === 1) return "yesterday"
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-}
+const SUGGESTIONS = [
+  "What kinds of things can you do?",
+  "A budget spreadsheet for the month",
+  "A one-page website for my club",
+  "A chore tracker for the family",
+  "A simple photo collage",
+]
 
-export function Home({
-  chats,
-  onOpenChat,
-  onStart,
-  onOpenLibrary,
-}: {
-  chats: ChatSummary[]
-  onOpenChat: (id: string) => void
-  onStart: (prompt: string) => Promise<void> | void
-  onOpenLibrary: () => void
-}) {
+export function Home({ onStart }: { onStart: (prompt: string) => Promise<void> | void }) {
   const [prompt, setPrompt] = useState("")
   const [busy, setBusy] = useState(false)
+
+  // Coming back from another screen should feel ready to type.
+  useEffect(() => {
+    const field = document.getElementById("home-prompt") as HTMLTextAreaElement | null
+    field?.focus()
+  }, [])
 
   const submit = async () => {
     if (!prompt.trim() || busy) return
@@ -38,20 +29,19 @@ export function Home({
   }
 
   return (
-    <main className="container">
-      <section className="hero">
-        <h1>What should we make today?</h1>
-        <p>
-          Say it in your own words. PopPD figures out the technical bits and hands you something you
-          can open with one click.
-        </p>
-      </section>
+    <main className="home">
+      <h1>What's on your mind?</h1>
+      <p className="lead">
+        Ask a question, think something through, or describe something you'd like made. If you
+        want a thing built, PopPD handles the technical bits and hands it over ready to open.
+      </p>
 
       <section className="prompt-card">
         <textarea
+          id="home-prompt"
           autoFocus
           value={prompt}
-          placeholder="A timer to help me focus… a spreadsheet for my expenses… a little website for my club…"
+          placeholder="Ask me anything… or a timer to help me focus, a spreadsheet for my expenses, a little website for my club…"
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -61,41 +51,20 @@ export function Home({
           }}
         />
         <div className="prompt-actions">
-          <span className="hint">It may take a few minutes. You can leave it running.</span>
+          <span className="hint">Just talking is fine too. Building may take a few minutes.</span>
           <button className="btn" disabled={!prompt.trim() || busy} onClick={() => void submit()}>
-            Make it →
+            Send
           </button>
         </div>
       </section>
 
-      <section>
-        <div className="row" style={{ marginBottom: 14 }}>
-          <h2 className="section-title" style={{ margin: 0 }}>
-            Recent
-          </h2>
-          <span className="spacer" />
-          <button className="btn link small" onClick={onOpenLibrary}>
-            See everything →
+      <div className="suggestions">
+        {SUGGESTIONS.map((suggestion) => (
+          <button key={suggestion} className="suggestion" onClick={() => setPrompt(suggestion)}>
+            {suggestion}
           </button>
-        </div>
-        {chats.length === 0 ? (
-          <div className="empty">Nothing yet — the first thing you make will appear here.</div>
-        ) : (
-          <div className="chat-list">
-            {chats.map((chat) => (
-              <button key={chat.id} className="chat-card" onClick={() => onOpenChat(chat.id)}>
-                <span style={{ fontSize: 20 }}>✨</span>
-                <span style={{ minWidth: 0 }}>
-                  <div className="title">{chat.title}</div>
-                  <div className="meta">{relative(chat.updatedAt)}</div>
-                </span>
-                <span className="spacer" />
-                <span className="muted">→</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
+        ))}
+      </div>
     </main>
   )
 }
